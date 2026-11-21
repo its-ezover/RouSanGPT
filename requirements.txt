@@ -1,0 +1,11 @@
+google-genai
+python-dotenv
+chromadb
+pypdf
+python-pptx
+matplotlib
+pillow
+pydantic
+numpy
+sounddevice
+edge-tts

@@ -1,0 +1,71 @@
+import io
+import os
+import wave
+
+import numpy as np
+import sounddevice as sd
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+load_dotenv()
+
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    http_options=types.HttpOptions(
+        timeout=60000,
+        retry_options=types.HttpRetryOptions(attempts=1),
+    ),
+)
+MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
+SAMPLE_RATE = 16000
+
+
+def record_until_enter() -> bytes:
+    """Record from the microphone until the user presses Enter. Returns WAV bytes."""
+    chunks = []
+
+    def callback(indata, frames, time_info, status):
+        chunks.append(indata.copy())
+
+    with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
+                        callback=callback):
+        input("  Recording... speak now, then press Enter to stop. ")
+
+    if not chunks:
+        return b""
+    audio = np.concatenate(chunks)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)        # 16-bit sound
+        wav.setframerate(SAMPLE_RATE)
+        wav.writeframes(audio.tobytes())
+    return buffer.getvalue()
+
+
+def transcribe(audio_bytes: bytes, mime_type: str = "audio/wav") -> str:
+    """Turn spoken audio into text (Arabic or English). Returns '' on failure."""
+    if not audio_bytes:
+        return ""
+    prompt = ("Transcribe this audio exactly as spoken, in the language that is "
+              "spoken (Arabic or English). Output only the transcript, nothing "
+              "else. If you hear no speech, output exactly: [no speech]")
+    for model in MODELS:
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=[prompt, types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)],
+            )
+            return (response.text or "").strip()
+        except Exception as e:
+            print(f"  ({model} failed: {str(e)[:70]})")
+    return ""
+
+
+# Quick self-test: run `python voice.py`
+if __name__ == "__main__":
+    print("Voice test. Press Enter to start recording.")
+    input()
+    text = transcribe(record_until_enter())
+    print("I heard:", text)

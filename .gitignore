@@ -1,0 +1,26 @@
+# secrets
+.env
+
+# rebuilt by commands
+venv/
+course_db/
+__pycache__/
+*.pyc
+
+# course materials (copyrighted and big)
+materials/
+ppt_originals/
+converted/
+transcripts/
+
+# generated outputs (small examples go in samples/)
+videos/
+animations/
+diagrams/
+quizzes/
+voice_samples/
+
+# logs
+*.log
+*_log.txt
+error*.txt
