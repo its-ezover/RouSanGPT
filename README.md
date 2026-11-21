@@ -3,7 +3,7 @@
 Course project for **NES 312 Computer Networks** (Instructor: Dr. Rousan).
 Author: AbdulAzez Sawalma
 
-Net.ai is an AI teaching assistant that answers from the course materials,
+RouSanGPT is an AI teaching assistant that answers from the course materials,
 calculates networking problems exactly, draws diagrams, runs quizzes, listens to
 voice questions, and creates narrated educational videos. It is built only with
 free tools.
