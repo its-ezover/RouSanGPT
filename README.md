@@ -44,8 +44,8 @@ The desktop and mobile app interfaces are [in progress / describe their status].
 
 ## Setup
 ```
-git clone https://github.com/YOUR-USERNAME/YOUR-REPO.git
-cd YOUR-REPO
+git clone https://github.com/YOUR-USERNAME/RouSanGPT.git
+cd RouSanGPT
 python -m venv venv
 source venv/bin/activate          # fish shell: source venv/bin/activate.fish
 pip install -r requirements.txt
@@ -84,8 +84,7 @@ At the `You:` prompt:
 | `video_tools.py` | narrated video generator |
 | `animation_tools.py` | animation engine |
 
-## Sample outputs
-See the `samples/` folder: [list your sample videos, screenshots and quiz files here].
+
 
 ## Known limitations
 - Videos are generated in English.
@@ -96,6 +95,3 @@ See the `samples/` folder: [list your sample videos, screenshots and quiz files 
 - Homework detection relies on the homework files and on what the student says, so
   it reduces cheating but cannot prevent it completely.
 
-## Copyright
-The course materials are not part of this repository. [Add the signed copyright-free
-agreement information here.]
