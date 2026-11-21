@@ -44,7 +44,7 @@ The desktop and mobile app interfaces are [in progress / describe their status].
 
 ## Setup
 ```
-git clone https://github.com/YOUR-USERNAME/RouSanGPT.git
+git clone https://github.com/its-ezover/RouSanGPT.git
 cd RouSanGPT
 python -m venv venv
 source venv/bin/activate          # fish shell: source venv/bin/activate.fish
