@@ -1,7 +1,7 @@
-# Net.ai - Computer Networks AI Teaching Assistant
+# RouSanGPT - Computer Networks AI Teaching Assistant
 
 Course project for **NES 312 Computer Networks** (Instructor: Dr. Rousan).
-Author: [Your Name], [Student ID]
+Author: AbdulAzez Sawalma
 
 Net.ai is an AI teaching assistant that answers from the course materials,
 calculates networking problems exactly, draws diagrams, runs quizzes, listens to
