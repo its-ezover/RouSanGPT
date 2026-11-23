@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RouSanGPT</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --accent:#38bdf8; --text:#e2e8f0; --muted:#94a3b8; --user:#0369a1; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100dvh; background:var(--bg); color:var(--text);
+         font-family: system-ui, "Segoe UI", Roboto, sans-serif; }
+  button { font:inherit; color:var(--text); background:#334155; border:0; border-radius:10px;
+           padding:10px 14px; cursor:pointer; }
+  button:hover { background:#475569; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  #app { display:flex; height:100dvh; }
+
+  #side { width:272px; flex-shrink:0; background:#0b1220; border-right:1px solid #1e293b;
+          display:flex; flex-direction:column; }
+  #side .top { padding:12px; }
+  #newChat { width:100%; background:var(--accent); color:#0f172a; font-weight:600; }
+  #list { flex:1; overflow-y:auto; padding:0 8px 12px; }
+  .item { display:flex; align-items:center; gap:2px; padding:9px 10px; border-radius:10px;
+          cursor:pointer; color:var(--muted); }
+  .item:hover, .item.active { background:var(--panel); }
+  .item.active { color:var(--text); }
+  .item .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .act { visibility:hidden; }
+  .item:hover .act, .item.active .act { visibility:visible; }
+  .icon { background:none; padding:2px 7px; font-size:.9rem; border-radius:6px; }
+
+  main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  header { padding:10px 16px; background:var(--panel); border-bottom:3px solid var(--accent);
+           display:flex; align-items:center; gap:10px; }
+  header h1 { font-size:1.1rem; margin:0; }
+  header small { color:var(--muted); font-weight:normal; margin-left:6px; }
+  #menu { display:none; padding:6px 12px; }
+
+  #chat { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .msg { max-width:min(820px,94%); padding:10px 14px; border-radius:14px; line-height:1.55;
+         overflow-wrap:anywhere; }
+  .user { align-self:flex-end; background:var(--user); white-space:pre-wrap; }
+  .bot { align-self:flex-start; background:var(--panel); }
+  .waiting { color:var(--muted); font-style:italic; }
+  .msg p { margin:.35em 0; } .msg ul, .msg ol { margin:.35em 0; padding-left:1.4em; }
+  .msg h4 { margin:.6em 0 .2em; }
+  pre { background:#0b1220; padding:10px; border-radius:8px; overflow-x:auto; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; background:#0b1220;
+         padding:1px 5px; border-radius:5px; }
+  pre code { padding:0; background:none; }
+  a { color:var(--accent); }
+  img, video { display:block; max-width:100%; border-radius:10px; margin-top:10px; background:#fff; }
+  video { background:#000; }
+  details { margin-top:10px; color:var(--muted); font-size:.9rem; }
+  .chip { display:inline-block; margin:8px 6px 0 0; padding:6px 12px; border-radius:20px;
+          background:#334155; font-size:.9rem; cursor:pointer; border:0; color:var(--text); }
+  .tools { margin-top:8px; font-size:.85rem; color:var(--muted); }
+  #status { min-height:1.3em; padding:0 16px; color:var(--accent); font-size:.9rem; }
+  #bar { display:flex; gap:8px; padding:10px 16px 16px; align-items:flex-end; }
+  #input { flex:1; resize:none; max-height:160px; padding:11px 14px; border-radius:12px;
+           border:1px solid #334155; background:var(--panel); color:var(--text); font:inherit; }
+  #mic.rec { background:#dc2626; animation:pulse 1s infinite; }
+  #send { background:var(--accent); color:#0f172a; font-weight:600; }
+  @keyframes pulse { 50% { opacity:.6; } }
+
+  @media (max-width: 800px) {
+    #side { position:fixed; z-index:20; top:0; bottom:0; left:-290px; transition:left .2s; }
+    #side.open { left:0; }
+    #menu { display:inline-block; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="top"><button id="newChat">+ New chat</button></div>
+    <div id="list"></div>
+  </aside>
+  <main>
+    <header>
+      <button id="menu">Chats</button>
+      <h1>RouSanGPT <small>Computer Networks tutor</small></h1>
+    </header>
+    <div id="chat"></div>
+    <div id="status"></div>
+    <div id="bar">
+      <textarea id="input" rows="1" placeholder="Ask a question... (Shift+Enter for a new line)"></textarea>
+      <button id="mic" title="Speak your question">Mic</button>
+      <button id="send">Send</button>
+    </div>
+  </main>
+</div>
+
+<script>
+const chatEl = document.getElementById("chat");
+const listEl = document.getElementById("list");
+const sideEl = document.getElementById("side");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const micBtn = document.getElementById("mic");
+const statusEl = document.getElementById("status");
+let busy = false, currentChat = null, messageCount = 0;
+let currentAudio = null, currentBtn = null;
+
+// show page errors in the blue line above the input box
+window.addEventListener("error", function (e) {
+  statusEl.textContent = "Page error: " + e.message + " (line " + e.lineno + ")";
+});
+window.addEventListener("unhandledrejection", function (e) {
+  statusEl.textContent = "Page error: " + (e.reason && e.reason.message ? e.reason.message : e.reason);
+});
+
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// A small Markdown reader: code blocks, headings, bold, italics, lists, links
+function md(src) {
+  const FENCE = String.fromCharCode(96).repeat(3);
+  const blocks = [];
+  const fence = new RegExp(FENCE + "[a-zA-Z]*\\n?([\\s\\S]*?)" + FENCE, "g");
+  src = src.replace(fence, function (_, code) { blocks.push(code); return "\u0000" + (blocks.length - 1) + "\u0000"; });
+  src = esc(src);
+  const inline = function (s) {
+    return s.replace(/`([^`]+)`/g, "<code>$1</code>")
+            .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+            .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>")
+            .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  };
+  let html = "", list = null;
+  const closeList = function () { if (list) { html += "</" + list + ">"; list = null; } };
+  src.split("\n").forEach(function (line) {
+    let m;
+    if ((m = line.match(/^\s*\u0000(\d+)\u0000\s*$/))) {
+      closeList(); html += "<pre><code>" + esc(blocks[+m[1]]) + "</code></pre>";
+    } else if ((m = line.match(/^#{1,6}\s+(.*)$/))) {
+      closeList(); html += "<h4>" + inline(m[1]) + "</h4>";
+    } else if ((m = line.match(/^\s*[-*\u2022]\s+(.*)$/))) {
+      if (list !== "ul") { closeList(); html += "<ul>"; list = "ul"; }
+      html += "<li>" + inline(m[1]) + "</li>";
+    } else if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) {
+      if (list !== "ol") { closeList(); html += "<ol>"; list = "ol"; }
+      html += "<li>" + inline(m[1]) + "</li>";
+    } else if (line.trim() === "") {
+      closeList();
+    } else {
+      closeList(); html += "<p>" + inline(line) + "</p>";
+    }
+  });
+  closeList();
+  return html;
+}
+
+function scrollDown() { chatEl.scrollTop = chatEl.scrollHeight; }
+
+function setStatus(text, ms) {
+  statusEl.textContent = text || "";
+  if (ms) setTimeout(function () { if (statusEl.textContent === text) statusEl.textContent = ""; }, ms);
+}
+
+async function api(method, url, body) {
+  const opts = { method: method, headers: {} };
+  if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const r = await fetch(url, opts);
+  let data = null;
+  try { data = await r.json(); } catch (e) {}
+  if (!r.ok) {
+    let msg = "Error " + r.status;
+    if (data && data.detail) msg = (typeof data.detail === "string") ? data.detail : JSON.stringify(data.detail);
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// ---- Messages ----
+function addUser(text) {
+  const d = document.createElement("div");
+  d.className = "msg user"; d.dir = "auto"; d.textContent = text;
+  chatEl.appendChild(d); scrollDown();
+}
+
+function addBot(reply, canSpeak) {
+  const d = document.createElement("div");
+  d.className = "msg bot"; d.dir = "auto";
+  d.innerHTML = md(reply.text || "");
+
+  (reply.media || []).forEach(function (m) {
+    if (m.type === "video") {
+      const v = document.createElement("video");
+      v.controls = true; v.src = m.url; v.preload = "metadata";
+      d.appendChild(v);
+    } else {
+      const a = document.createElement("a");
+      a.href = m.url; a.target = "_blank";
+      const img = document.createElement("img"); img.src = m.url;
+      a.appendChild(img); d.appendChild(a);
+    }
+  });
+  if (reply.tools && reply.tools.length) {
+    const t = document.createElement("div");
+    t.className = "tools"; t.textContent = "Tools used: " + reply.tools.join(", ");
+    d.appendChild(t);
+  }
+  if (reply.sources && reply.sources.length) {
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = "Sources (" + reply.sources.length + ")";
+    det.appendChild(sum);
+    const ul = document.createElement("ul");
+    reply.sources.forEach(function (s) {
+      const li = document.createElement("li");
+      li.textContent = s.source + " - " + s.location;
+      ul.appendChild(li);
+    });
+    det.appendChild(ul); d.appendChild(det);
+  }
+  if (canSpeak && reply.text) {
+    const sp = document.createElement("button");
+    sp.className = "chip"; sp.textContent = "Listen"; sp.dataset.playing = "0";
+    sp.onclick = function () { toggleSpeak(sp, reply.text); };
+    d.appendChild(sp);
+  }
+  (reply.chips || []).forEach(function (text) {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = text;
+    b.onclick = function () { send(text); };
+    d.appendChild(b);
+  });
+  chatEl.appendChild(d); scrollDown();
+}
+
+function addWaiting() {
+  const d = document.createElement("div");
+  d.className = "msg bot waiting"; d.textContent = "Thinking...";
+  chatEl.appendChild(d); scrollDown();
+  const t0 = Date.now();
+  const timer = setInterval(function () {
+    const s = Math.round((Date.now() - t0) / 1000);
+    d.textContent = "Thinking... " + s + "s" + (s > 20 ? " (videos and animations can take a few minutes)" : "");
+  }, 1000);
+  return { stop: function () { clearInterval(timer); d.remove(); } };
+}
+
+function welcome() {
+  addBot({
+    text: "Hi! I'm **RouSanGPT**, your Computer Networks tutor. I answer from our course slides and books, " +
+          "calculate exactly, draw diagrams, run quizzes, and make videos. You can type or use the microphone, " +
+          "in English or Arabic. Try one of these:",
+    chips: ["What is the difference between TCP and UDP?", "Quiz me on subnetting",
+            "Draw the TCP three-way handshake", "Show me an animation of Dijkstra's algorithm",
+            "Make a video explaining how DNS works"]
+  }, false);
+}
+
+function setBusy(b) {
+  busy = b; sendBtn.disabled = b; input.disabled = b; micBtn.disabled = b;
+  if (!b) input.focus();
+}
+
+function autosize() {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 160) + "px";
+}
+
+// ---- Saved chats (the sidebar) ----
+function iconBtn(label, title, handler) {
+  const b = document.createElement("button");
+  b.className = "icon act"; b.textContent = label; b.title = title; b.onclick = handler;
+  return b;
+}
+
+async function refreshList() {
+  const chats = await api("GET", "/api/chats");
+  listEl.innerHTML = "";
+  chats.forEach(function (c) {
+    const row = document.createElement("div");
+    row.className = "item" + (c.id === currentChat ? " active" : "");
+    const t = document.createElement("span");
+    t.className = "t"; t.textContent = c.title; t.dir = "auto";
+    row.appendChild(t);
+    row.appendChild(iconBtn("\u270E", "Rename", function (e) { e.stopPropagation(); renameChat(c); }));
+    row.appendChild(iconBtn("\u2715", "Delete", function (e) { e.stopPropagation(); deleteChat(c); }));
+    row.onclick = function () { openChat(c.id); };
+    listEl.appendChild(row);
+  });
+  return chats;
+}
+
+async function openChat(id) {
+  if (busy) return;
+  stopAudio();
+  const data = await api("GET", "/api/chats/" + id);
+  currentChat = id; localStorage.setItem("lastChat", id);
+  chatEl.innerHTML = ""; messageCount = data.messages.length;
+  if (!messageCount) welcome();
+  data.messages.forEach(function (m) {
+    if (m.role === "user") addUser(m.text); else addBot(m, true);
+  });
+  sideEl.classList.remove("open");
+  await refreshList();
+  scrollDown();
+}
+
+// "+ New chat" shows a blank chat. It is saved (and appears in the sidebar) when you send the first message.
+async function newChat() {
+  if (busy) return;
+  stopAudio();
+  currentChat = null; messageCount = 0;
+  localStorage.removeItem("lastChat");
+  chatEl.innerHTML = ""; welcome();
+  sideEl.classList.remove("open");
+  await refreshList();
+  input.focus();
+}
+
+async function renameChat(c) {
+  const name = prompt("Rename this chat:", c.title);
+  if (name === null) return;
+  await api("PATCH", "/api/chats/" + c.id, { title: name });
+  await refreshList();
+}
+
+async function deleteChat(c) {
+  if (busy || !confirm('Delete "' + c.title + '"?')) return;
+  await api("DELETE", "/api/chats/" + c.id);
+  if (c.id === currentChat) {
+    currentChat = null; localStorage.removeItem("lastChat");
+    const chats = await refreshList();
+    if (chats.length) await openChat(chats[0].id); else await newChat();
+  } else {
+    await refreshList();
+  }
+}
+
+// ---- Sending a question ----
+async function send(text) {
+  text = (text === undefined ? input.value : text).trim();
+  if (!text || busy) return;
+  input.value = ""; autosize();
+  addUser(text); setBusy(true);
+  const waiting = addWaiting();
+  try {
+    if (!currentChat) {                      // first message of a new chat: create it now
+      const created = await api("POST", "/api/chats");
+      currentChat = created.id;
+      localStorage.setItem("lastChat", created.id);
+    }
+    const j = await api("POST", "/api/chat", { chat_id: currentChat, message: text });
+    // the answer is prepared in the background: ask for it every 2 seconds
+    let result = null, failures = 0;
+    while (!result) {
+      await new Promise(function (ok) { setTimeout(ok, 2000); });
+      try {
+        const data = await api("GET", "/api/result/" + j.job_id);
+        if (data.status === "error") throw new Error(data.error);
+        if (data.status === "done") result = data;
+        failures = 0;
+      } catch (e) {
+        if (e.message.indexOf("tutor") !== -1 || ++failures > 5) throw e;
+      }
+    }
+    waiting.stop();
+    messageCount += 2;
+    addBot({ text: result.reply, tools: result.tools, sources: result.sources, media: result.media }, true);
+    refreshList();
+  } catch (e) {
+    waiting.stop();
+    addBot({ text: "Something went wrong: " + e.message }, false);
+  }
+  setBusy(false);
+}
+
+// ---- Read an answer aloud ----
+function stopAudio() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (currentBtn) { currentBtn.dataset.playing = "0"; currentBtn.textContent = "Listen"; currentBtn = null; }
+}
+
+async function toggleSpeak(btn, text) {
+  if (btn.dataset.playing === "1") { stopAudio(); return; }
+  stopAudio();
+  btn.textContent = "Loading...";
+  try {
+    const r = await fetch("/api/speak", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text })
+    });
+    if (!r.ok) {
+      let d = null; try { d = await r.json(); } catch (e) {}
+      throw new Error((d && d.detail) || ("Error " + r.status));
+    }
+    const audio = new Audio(URL.createObjectURL(await r.blob()));
+    currentAudio = audio; currentBtn = btn;
+    btn.dataset.playing = "1"; btn.textContent = "Stop";
+    audio.onended = stopAudio;
+    await audio.play();
+  } catch (e) {
+    btn.textContent = "Listen";
+    setStatus("Could not read aloud: " + e.message, 6000);
+  }
+}
+
+// ---- Voice input ----
+let recorder = null, chunks = [];
+
+async function toggleMic() {
+  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = []; recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = function (e) { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = async function () {
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      micBtn.classList.remove("rec"); micBtn.textContent = "Mic";
+      await uploadVoice(new Blob(chunks, { type: recorder.mimeType }));
+    };
+    recorder.start(); micBtn.classList.add("rec"); micBtn.textContent = "Stop";
+    setStatus("Listening... press Stop when you finish speaking.");
+  } catch (e) {
+    setStatus("Microphone not available: " + e.message, 6000);
+  }
+}
+
+async function uploadVoice(blob) {
+  setStatus("Turning your voice into text...");
+  const fd = new FormData(); fd.append("audio", blob, "voice");
+  try {
+    const r = await fetch("/api/transcribe", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || ("Error " + r.status));
+    if (j.text) {
+      input.value = (input.value ? input.value + " " : "") + j.text;
+      autosize(); input.focus(); setStatus("Check the text, then press Send.", 5000);
+    } else {
+      setStatus("I could not hear anything. Please try again.", 5000);
+    }
+  } catch (e) {
+    setStatus("Voice problem: " + e.message, 6000);
+  }
+}
+
+// ---- Buttons, keys and start-up ----
+sendBtn.onclick = function () { send(); };
+micBtn.onclick = toggleMic;
+document.getElementById("newChat").onclick = newChat;
+document.getElementById("menu").onclick = function () { sideEl.classList.toggle("open"); };
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+});
+
+(async function init() {
+  try {
+    const chats = await refreshList();
+    const last = localStorage.getItem("lastChat");
+    const found = chats.find(function (c) { return c.id === last; });
+    if (found) await openChat(found.id);
+    else if (chats.length) await openChat(chats[0].id);
+    else await newChat();
+  } catch (e) {
+    setStatus("Could not reach the server: " + e.message);
+  }
+})();
+</script>
+</body>
+</html>

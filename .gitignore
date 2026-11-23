@@ -24,3 +24,4 @@ voice_samples/
 *.log
 *_log.txt
 error*.txt
+chats.db
