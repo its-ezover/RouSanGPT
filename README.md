@@ -57,9 +57,9 @@ database (takes a few minutes):
 ```
 python ingest.py
 ```
-Start the assistant:
+Start the assistant (at 127.0.0.1:8000):
 ```
-python chat.py
+python server.py
 ```
 
 ## How to use it
