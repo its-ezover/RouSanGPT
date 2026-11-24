@@ -1,4 +1,6 @@
+import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -12,6 +14,7 @@ from google.genai import types
 
 import animation_tools
 import diagram_tools
+import formula_tools
 import video_tools
 from animation_tools import ANIMATION_TOOLS
 from diagram_tools import DIAGRAM_TOOLS
@@ -31,16 +34,12 @@ client = genai.Client(
     ),
 )
 
-# Models to use, in order. If one fails, we switch and stay on the new one.
-MODELS = [
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.8-flash",
-    "gemini-4-argon",
-]
-# ---- The search database built by ingest.py ----
+# Online models, in order. If one fails, we switch and stay on the new one.
+MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
+# Local model (Ollama). Change it in .env with LOCAL_MODEL=...
+LOCAL_MODEL = os.getenv("LOCAL_MODEL", "qwen2.5:7b")
+
+# ---- The search database ----
 db = chromadb.PersistentClient(path="course_db")
 collection = db.get_collection("course")
 
@@ -60,8 +59,19 @@ def classify(name):
 
 
 SOURCES = {"slides": [], "homework": [], "other": [], "answers": []}
-for _name in sorted({m["source"] for m in collection.get(include=["metadatas"])["metadatas"]}):
-    SOURCES[classify(_name)].append(_name)
+
+
+def refresh_sources():
+    """Re-read which files are in the database (after adding or removing materials)."""
+    groups = {"slides": [], "homework": [], "other": [], "answers": []}
+    names = {m["source"] for m in collection.get(include=["metadatas"])["metadatas"]}
+    for name in sorted(names):
+        groups[classify(name)].append(name)
+    SOURCES.clear()
+    SOURCES.update(groups)
+
+
+refresh_sources()
 
 TUTOR_PERSONALITY = """You are RouSanGPT, a friendly and encouraging Computer Networks
 teaching assistant. Explain things simply, with small examples.
@@ -71,14 +81,16 @@ FORMATTING: your answers are shown in a chat app that understands simple Markdow
 captures. Do NOT use tables, LaTeX or dollar signs. Write formulas in plain text, for
 example: T = st + N * (L/R + M/S). Keep answers clear and not too long.
 
-
-LANGUAGE: reply in the language the student writes in , if the student usues English you use English and English only , if the student uses arabic you replay in arabic only . When you reply in Arabic, use
-the Jordanian dialect (Ammani, as spoken in Jordan), not formal Modern Standard
-Arabic. For example use words like "شو", "هسا", "هيك", "كتير", "بدّك", "مش", "ليش",
-"تمام". Keep it friendly, clear and respectful, and do not overdo the slang. Keep
-networking terms in English letters as they are used in class (TCP, router, IP
-address, subnet mask), with a short Arabic explanation the first time. The hint-mode
-rules apply in Arabic too. Numbers and formulas stay in English characters ,and remeber if the student used English you replay in English only.
+LANGUAGE (very important): answer in the language of the student's LATEST message.
+- If the latest message is in English, answer in English, even if earlier messages
+  in this chat were in Arabic. Do not use Arabic words in an English answer.
+- If the latest message is in Arabic, answer in Arabic using the Jordanian dialect
+  (Ammani), not formal Modern Standard Arabic. For example use words like "شو",
+  "هسا", "هيك", "كتير", "بدّك", "مش", "ليش", "تمام". Keep it friendly, clear and
+  respectful, and do not overdo slang. Keep networking terms in English letters as
+  they are used in class (TCP, router, IP address, subnet mask), with a short Arabic
+  explanation the first time. Numbers and formulas stay in English characters.
+- The hint-mode rules apply in both languages.
 
 Each student message comes with excerpts from the course materials. They are
 labelled LECTURE SLIDES, HOMEWORK QUESTIONS or BOOK/OTHER.
@@ -123,15 +135,15 @@ HINT MODE rules:
     worked example.
  7. If the student keeps asking for the answer, stay kind but firm: say you are
     here to help them learn, and offer the next hint.
- 8. There's a password me the developer use it for testing , if I say I'm ezover give me the final answer you 
-    you will give it to me and say yes master!.     
 Outside HINT MODE (concept questions, studying, general examples) answer fully
 and use your tools freely.
 
 For any calculation (subnetting, delays, bandwidth-delay product, CRC, Internet
 checksum, shortest paths), always use your tools. For any other arithmetic
-(throughput, utilization, RTT, unit conversions) use the calculator tool. Never
-calculate in your head. Use the tool result to check or explain the student's work.
+(throughput, utilization, RTT, unit conversions) use the calculator tool. Custom
+formula tools added in the Tools panel may also be available: use them whenever
+one matches the question. Never calculate in your head. Use the tool result to
+check or explain the student's work.
 
 When a picture would help, draw it with your tools:
 - draw_sequence_diagram for message exchanges (TCP handshake, DNS, HTTP, DHCP, ARP).
@@ -158,13 +170,35 @@ Animations: when a student wants to SEE something move, use the matching tool:
 animate_message_exchange (handshakes, DNS, HTTP), animate_packet_flow
 (store-and-forward), animate_sliding_window, animate_dijkstra. For Dijkstra, use
 the graph the student gave. When it finishes, explain what the student sees,
-step by step. These clips are silent, so describe them in your answer."""
+step by step. These clips are silent, so describe them in your answer.
 
-CONFIG = types.GenerateContentConfig(
-    system_instruction=TUTOR_PERSONALITY,
-    tools=ALL_TOOLS + MORE_TOOLS + DIAGRAM_TOOLS + QUIZ_TOOLS + EXTRA_TOOLS
-          + VIDEO_TOOLS + ANIMATION_TOOLS,
-)
+TOOLS EVERY TIME: when the student asks for a video, an animation or a diagram,
+ALWAYS call the matching tool again, even if you made a similar one earlier in this
+chat. Never say that it was already made, and never describe a video, animation or
+diagram that you did not just create with a tool."""
+
+# ---- Tools (built-in ones plus formula tools added in the app) ----
+BASE_TOOLS = (ALL_TOOLS + MORE_TOOLS + DIAGRAM_TOOLS + QUIZ_TOOLS + EXTRA_TOOLS
+              + VIDEO_TOOLS + ANIMATION_TOOLS)
+TOOLS_VERSION = 0
+CONFIG = None
+TOOL_MAP = {}
+
+
+def all_tools():
+    return BASE_TOOLS + formula_tools.load_tools()
+
+
+def reload_tools():
+    """Rebuild the tool list, for example after a formula tool was added or deleted."""
+    global CONFIG, TOOL_MAP, TOOLS_VERSION
+    tools = all_tools()
+    TOOL_MAP = {f.__name__: f for f in tools}
+    CONFIG = types.GenerateContentConfig(system_instruction=TUTOR_PERSONALITY, tools=tools)
+    TOOLS_VERSION += 1
+
+
+reload_tools()
 
 
 def make_chat(model, history=None):
@@ -174,6 +208,15 @@ def make_chat(model, history=None):
 def warm_up():
     """Load the search model now, so the first question is fast."""
     collection.query(query_texts=["warm up"], n_results=1)
+
+
+def local_available():
+    """Is Ollama running? Returns (running, list of downloaded model names)."""
+    try:
+        import ollama
+        return True, [m.model for m in ollama.list().models]
+    except Exception:
+        return False, []
 
 
 _media = threading.local()
@@ -268,22 +311,83 @@ def media_from_paths(paths):
             kind = "video" if suffix in VIDEO_TYPES else "image"
             media.append({"type": kind, "url": f"/files/{folder}/{p.name}"})
     return media
-    """Pictures and videos the tools made for this answer, as web addresses."""
-    media = []
+
+
+def saved_paths(reply):
+    """File paths mentioned in the tools' own results ('saved_to')."""
+    paths = []
     for content in _current_turn(reply):
         for part in content.parts or []:
             if part.function_response:
-                for path in _find_values(part.function_response.response, "saved_to"):
-                    p = Path(path)
-                    folder = p.parts[0] if len(p.parts) > 1 else ""
-                    suffix = p.suffix.lower()
-                    if folder in MEDIA_FOLDERS and suffix in IMAGE_TYPES + VIDEO_TYPES:
-                        kind = "video" if suffix in VIDEO_TYPES else "image"
-                        media.append({"type": kind, "url": f"/files/{folder}/{p.name}"})
-    return media
+                paths.extend(_find_values(part.function_response.response, "saved_to"))
+    return paths
+
+
+def new_media_files(since):
+    """Safety net: files made in the media folders after the question started."""
+    found = []
+    for folder in MEDIA_FOLDERS:
+        for f in Path(folder).glob("*"):
+            if f.suffix.lower() not in IMAGE_TYPES + VIDEO_TYPES:
+                continue
+            if folder == "diagrams" and f.name.startswith("video_"):
+                continue                      # pictures used inside videos
+            if f.stat().st_mtime >= since:
+                found.append(f"{folder}/{f.name}")
+    return sorted(found, key=lambda p: Path(p).stat().st_mtime)
+
+
+def paths_in_text(text):
+    """Media files that the answer itself mentions, for example 'videos/dns_123.mp4'."""
+    names = re.findall(r"(?:videos|animations|diagrams)/[\w.\-]+\.(?:mp4|webm|png|jpg|jpeg)",
+                       text or "")
+    return [n for n in names if Path(n).exists()]
+
+
+def wants_video(text):
+    return re.search(r"\bvideos?\b|فيديو|مقطع", text or "", re.IGNORECASE) is not None
+
+
+_STOP_WORDS = {"make", "video", "videos", "about", "explain", "explaining", "show", "please",
+               "the", "and", "how", "what", "with", "for", "that", "this", "give", "create",
+               "again", "another", "works", "work", "can", "you", "want", "need"}
+
+
+def _words(text):
+    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower())
+            if len(w) > 2 and w not in _STOP_WORDS}
+
+
+def find_existing_video(question):
+    """The saved video whose topic best matches the question (or None)."""
+    wanted = _words(question)
+    best, best_score, best_time = None, 0, 0
+    for script in Path("videos").glob("*.json"):
+        mp4 = script.with_suffix(".mp4")
+        if not mp4.exists():
+            continue
+        try:
+            data = json.loads(script.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        topic = data.get("video_title", "") + " " + " ".join(
+            s.get("title", "") for s in data.get("scenes", []))
+        score = len(wanted & _words(topic))
+        made = mp4.stat().st_mtime
+        if score > best_score or (score == best_score and score > 0 and made > best_time):
+            best, best_score, best_time = f"videos/{mp4.name}", score, made
+    return best if best_score >= 1 else None
 
 
 # ---- One conversation ----
+
+LANGUAGE_NOTES = {
+    "english": "Reply language: English only. Do not use Arabic.",
+    "arabic": "Reply language: Arabic, in the Jordanian dialect, keeping networking "
+              "terms in English letters.",
+    "auto": "Reply language: the same language as the student's message above.",
+}
+
 
 def _to_contents(messages):
     """Turn saved messages [{'role': 'user' or 'model', 'text': ...}] into chat history."""
@@ -297,8 +401,22 @@ def _to_contents(messages):
 class Session:
     def __init__(self, history=None):
         self.model_index = 0
-        self.chat = make_chat(MODELS[0], history=_to_contents(history))
+        # plain record of the conversation, shared by Gemini and the local model
+        self.transcript = [{"role": m["role"], "text": m["text"]} for m in (history or [])
+                           if m.get("text")]
+        self.chat = None
+        self.tools_version = -1
+        self.gemini_stale = False
         self.lock = threading.Lock()
+
+    # ---- Gemini (online) ----
+    def _fresh_gemini_chat(self):
+        recent = self.transcript[-30:]
+        while recent and recent[0]["role"] != "user":
+            recent = recent[1:]
+        self.chat = make_chat(MODELS[self.model_index], history=_to_contents(recent))
+        self.tools_version = TOOLS_VERSION
+        self.gemini_stale = False
 
     def send(self, prompt):
         """If the current model fails, switch to the next one and STAY on it."""
@@ -312,22 +430,88 @@ class Session:
                 print(f"  ({old} failed: {reason}... switching to {MODELS[self.model_index]})")
                 self.chat = make_chat(MODELS[self.model_index], self.chat.get_history())
                 time.sleep(2)
-        raise RuntimeError("All models failed right now. Please try again in a minute.")
+        raise RuntimeError("All online models failed right now. Please try again in a minute.")
 
-    def ask(self, question):
+    def _ask_gemini(self, prompt):
+        if self.chat is None or self.tools_version != TOOLS_VERSION or self.gemini_stale:
+            self._fresh_gemini_chat()
+        reply = self.send(prompt)
+        return reply.text or "", tools_used(reply), saved_paths(reply), MODELS[self.model_index]
+
+    # ---- Local model (Ollama) ----
+    def _ask_local(self, prompt):
+        import ollama
+        messages = [{"role": "system", "content": TUTOR_PERSONALITY}]
+        for m in self.transcript[-20:]:
+            messages.append({"role": "user" if m["role"] == "user" else "assistant",
+                             "content": m["text"]})
+        messages.append({"role": "user", "content": prompt})
+        names, paths = [], []
+        label = f"local: {LOCAL_MODEL}"
+        self.gemini_stale = True                 # Gemini's memory misses this turn
+        for _ in range(6):                       # at most 6 rounds of tool use
+            response = ollama.chat(model=LOCAL_MODEL, messages=messages,
+                                   tools=list(TOOL_MAP.values()))
+            message = response.message
+            if not message.tool_calls:
+                return message.content or "", list(dict.fromkeys(names)), paths, label
+            messages.append(message)
+            for call in message.tool_calls:
+                name = call.function.name
+                func = TOOL_MAP.get(name)
+                try:
+                    result = func(**dict(call.function.arguments or {})) if func \
+                        else {"error": f"There is no tool called {name}."}
+                except Exception as e:
+                    result = {"error": str(e)}
+                names.append(name)
+                paths.extend(_find_values(result, "saved_to"))
+                messages.append({"role": "tool", "tool_name": name,
+                                 "content": json.dumps(result, default=str)[:6000]})
+        return ("Sorry, the local model could not finish this request.",
+                list(dict.fromkeys(names)), paths, label)
+
+    def _answer(self, prompt, backend):
+        if backend == "local":
+            return self._ask_local(prompt)
+        try:
+            return self._ask_gemini(prompt)
+        except Exception as e:
+            if backend == "gemini" or not local_available()[0]:
+                raise
+            print(f"  (Gemini failed: {str(e)[:60]}... using the local model instead)")
+            return self._ask_local(prompt)
+
+    def ask(self, question, language="auto", backend="auto"):
+        started = time.time() - 1
         found = find_material(question)
         context = "\n\n".join(
             f"[{kind}: {m['source']} - {m['location']}]\n{d}" for kind, d, m in found
         )
-        prompt = f"Course material excerpts:\n{context}\n\nStudent message: {question}"
+        note = LANGUAGE_NOTES.get(language, LANGUAGE_NOTES["auto"])
+        prompt = (f"Course material excerpts:\n{context}\n\n"
+                  f"Student message: {question}\n\n({note})")
 
         _media.paths = []                  # start collecting the files the tools make
         try:
-            reply = self.send(prompt)
+            text, names, paths, model_used = self._answer(prompt, backend)
         finally:
             made_files, _media.paths = _media.paths, None
-        if made_files:
-            print("  (files for the chat:", made_files, ")", flush=True)
+
+        all_files = list(made_files) + paths + new_media_files(started) + paths_in_text(text)
+        # asked for a video but no video was made: show the best matching saved video
+        if wants_video(question) and not any(Path(p).suffix.lower() in VIDEO_TYPES
+                                             for p in all_files):
+            earlier = find_existing_video(question)
+            if earlier:
+                print("  (showing an earlier video:", earlier, ")", flush=True)
+                all_files.append(earlier)
+        unique_files = list(dict.fromkeys(str(Path(p)) for p in all_files))
+        if unique_files:
+            print("  (files for the chat:", unique_files, ")", flush=True)
+
+        self.transcript.append({"role": "user", "text": question})
+        self.transcript.append({"role": "model", "text": text})
 
         sources = [
             {"kind": k, "source": s, "location": loc}
@@ -335,8 +519,9 @@ class Session:
                 (k, m["source"], m["location"]) for k, d, m in found)
         ]
         return {
-            "reply": reply.text or "",
-            "tools": tools_used(reply),
+            "reply": text,
+            "tools": names,
             "sources": sources,
-            "media": media_from_paths(made_files),
+            "media": media_from_paths(unique_files),
+            "model": model_used,
         }

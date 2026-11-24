@@ -44,13 +44,25 @@ def record_until_enter() -> bytes:
     return buffer.getvalue()
 
 
-def transcribe(audio_bytes: bytes, mime_type: str = "audio/wav") -> str:
-    """Turn spoken audio into text (Arabic or English). Returns '' on failure."""
+def transcribe(audio_bytes: bytes, mime_type: str = "audio/wav", language: str = "auto") -> str:
+    """Turn spoken audio into text. language: 'auto', 'english' or 'arabic'.
+    Returns '' on failure."""
     if not audio_bytes:
         return ""
-    prompt = ("Transcribe this audio exactly as spoken, in the language that is "
-              "spoken (Arabic or English). Output only the transcript, nothing "
-              "else. If you hear no speech, output exactly: [no speech]")
+    if language == "english":
+        rule = "The speaker is speaking English. Write the transcript in English."
+    elif language == "arabic":
+        rule = ("The speaker is speaking Arabic (Jordanian dialect). Write the transcript in "
+                "Arabic letters, but write English technical terms such as TCP, UDP, IP, DNS "
+                "and router in English letters.")
+    else:
+        rule = ("Detect the language that is spoken (English or Arabic). If it is English, "
+                "write the transcript in English letters only and never in Arabic letters. "
+                "If it is Arabic, write it in Arabic letters but keep English technical terms "
+                "such as TCP, UDP, IP and DNS in English letters.")
+    prompt = ("Transcribe this audio exactly as spoken. " + rule +
+              " Output only the transcript, nothing else. "
+              "If you hear no speech, output exactly: [no speech]")
     for model in MODELS:
         try:
             response = client.models.generate_content(

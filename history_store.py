@@ -86,6 +86,7 @@ def add_exchange(chat_id, user_text, result):
         "tools": result.get("tools", []),
         "sources": result.get("sources", []),
         "media": result.get("media", []),
+        "model": result.get("model", ""),
     })
     with _lock, closing(_connect()) as conn, conn:
         conn.execute(

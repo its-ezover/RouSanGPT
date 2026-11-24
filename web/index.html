@@ -14,12 +14,15 @@
   button:hover { background:#475569; }
   button:disabled { opacity:.5; cursor:not-allowed; }
   #app { display:flex; height:100dvh; }
+  #app.collapsed #side { display:none; }
 
   #side { width:272px; flex-shrink:0; background:#0b1220; border-right:1px solid #1e293b;
           display:flex; flex-direction:column; }
   #side .top { padding:12px; }
   #newChat { width:100%; background:var(--accent); color:#0f172a; font-weight:600; }
   #list { flex:1; overflow-y:auto; padding:0 8px 12px; }
+  #side .bottom { padding:10px 12px; border-top:1px solid #1e293b; display:flex; gap:8px; }
+  #side .bottom button { flex:1; font-size:.9rem; padding:8px 10px; }
   .item { display:flex; align-items:center; gap:2px; padding:9px 10px; border-radius:10px;
           cursor:pointer; color:var(--muted); }
   .item:hover, .item.active { background:var(--panel); }
@@ -32,9 +35,11 @@
   main { flex:1; min-width:0; display:flex; flex-direction:column; }
   header { padding:10px 16px; background:var(--panel); border-bottom:3px solid var(--accent);
            display:flex; align-items:center; gap:10px; }
-  header h1 { font-size:1.1rem; margin:0; }
+  header h1 { font-size:1.1rem; margin:0; white-space:nowrap; }
   header small { color:var(--muted); font-weight:normal; margin-left:6px; }
-  #menu { display:none; padding:6px 12px; }
+  #toggleSide { padding:6px 12px; font-size:1.1rem; }
+  #backend { margin-left:auto; background:var(--bg); color:var(--text); border:1px solid #334155;
+             border-radius:8px; padding:6px 8px; font:inherit; font-size:.9rem; max-width:260px; }
 
   #chat { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
   .msg { max-width:min(820px,94%); padding:10px 14px; border-radius:14px; line-height:1.55;
@@ -59,14 +64,37 @@
   #bar { display:flex; gap:8px; padding:10px 16px 16px; align-items:flex-end; }
   #input { flex:1; resize:none; max-height:160px; padding:11px 14px; border-radius:12px;
            border:1px solid #334155; background:var(--panel); color:var(--text); font:inherit; }
+  #lang { background:var(--panel); color:var(--text); border:1px solid #334155; border-radius:10px;
+          padding:10px 8px; font:inherit; }
   #mic.rec { background:#dc2626; animation:pulse 1s infinite; }
   #send { background:var(--accent); color:#0f172a; font-weight:600; }
   @keyframes pulse { 50% { opacity:.6; } }
 
+  /* pop-up panels (Materials, Tools) */
+  .hidden { display:none !important; }
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center;
+           justify-content:center; z-index:50; }
+  .panel { background:var(--panel); width:min(780px,94vw); max-height:88vh; overflow-y:auto;
+           border-radius:14px; padding:16px 20px; }
+  .phead { display:flex; align-items:center; justify-content:space-between; }
+  .phead h2 { margin:0; font-size:1.2rem; }
+  .card { background:var(--bg); border-radius:10px; padding:12px 14px; margin:12px 0; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #1e293b; }
+  .row .grow { flex:1; overflow-wrap:anywhere; }
+  .field { display:block; margin:8px 0; }
+  .field span { display:block; font-size:.85rem; color:var(--muted); margin-bottom:3px; }
+  .field input, .field textarea { width:100%; padding:8px 10px; border-radius:8px;
+           border:1px solid #334155; background:var(--panel); color:var(--text); font:inherit; }
+  .small { padding:6px 12px; font-size:.85rem; }
+  .danger { background:#7f1d1d; }
+
   @media (max-width: 800px) {
     #side { position:fixed; z-index:20; top:0; bottom:0; left:-290px; transition:left .2s; }
+    #app.collapsed #side { display:flex; }
     #side.open { left:0; }
-    #menu { display:inline-block; }
+    header small { display:none; }
+    #backend { max-width:130px; }
   }
 </style>
 </head>
@@ -75,23 +103,45 @@
   <aside id="side">
     <div class="top"><button id="newChat">+ New chat</button></div>
     <div id="list"></div>
+    <div class="bottom">
+      <button id="openMaterials">Materials</button>
+      <button id="openTools">Tools</button>
+    </div>
   </aside>
   <main>
     <header>
-      <button id="menu">Chats</button>
+      <button id="toggleSide" title="Show or hide the sidebar">&#9776;</button>
       <h1>RouSanGPT <small>Computer Networks tutor</small></h1>
+      <select id="backend" title="Which AI answers">
+        <option value="auto">Auto (Gemini, local if offline)</option>
+        <option value="gemini">Gemini (online)</option>
+        <option value="local">Local model</option>
+      </select>
     </header>
     <div id="chat"></div>
     <div id="status"></div>
     <div id="bar">
       <textarea id="input" rows="1" placeholder="Ask a question... (Shift+Enter for a new line)"></textarea>
+      <select id="lang" title="Language for voice and answers">
+        <option value="auto">Auto</option>
+        <option value="english">English</option>
+        <option value="arabic">العربية</option>
+      </select>
       <button id="mic" title="Speak your question">Mic</button>
       <button id="send">Send</button>
     </div>
   </main>
 </div>
 
+<div id="modal" class="hidden">
+  <div class="panel">
+    <div class="phead"><h2 id="mtitle"></h2><button id="mclose" class="small">Close</button></div>
+    <div id="mbody"></div>
+  </div>
+</div>
+
 <script>
+const appEl = document.getElementById("app");
 const chatEl = document.getElementById("chat");
 const listEl = document.getElementById("list");
 const sideEl = document.getElementById("side");
@@ -99,6 +149,11 @@ const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
 const micBtn = document.getElementById("mic");
 const statusEl = document.getElementById("status");
+const langEl = document.getElementById("lang");
+const backendEl = document.getElementById("backend");
+const modalEl = document.getElementById("modal");
+const mtitle = document.getElementById("mtitle");
+const mbody = document.getElementById("mbody");
 let busy = false, currentChat = null, messageCount = 0;
 let currentAudio = null, currentBtn = null;
 
@@ -113,6 +168,15 @@ window.addEventListener("unhandledrejection", function (e) {
 function esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function sleep(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
 
 // A small Markdown reader: code blocks, headings, bold, italics, lists, links
 function md(src) {
@@ -174,14 +238,14 @@ async function api(method, url, body) {
 
 // ---- Messages ----
 function addUser(text) {
-  const d = document.createElement("div");
-  d.className = "msg user"; d.dir = "auto"; d.textContent = text;
+  const d = el("div", "msg user", text);
+  d.dir = "auto";
   chatEl.appendChild(d); scrollDown();
 }
 
 function addBot(reply, canSpeak) {
-  const d = document.createElement("div");
-  d.className = "msg bot"; d.dir = "auto";
+  const d = el("div", "msg bot");
+  d.dir = "auto";
   d.innerHTML = md(reply.text || "");
 
   (reply.media || []).forEach(function (m) {
@@ -196,33 +260,25 @@ function addBot(reply, canSpeak) {
       a.appendChild(img); d.appendChild(a);
     }
   });
-  if (reply.tools && reply.tools.length) {
-    const t = document.createElement("div");
-    t.className = "tools"; t.textContent = "Tools used: " + reply.tools.join(", ");
-    d.appendChild(t);
-  }
+  const info = [];
+  if (reply.model) info.push("Answered by: " + reply.model);
+  if (reply.tools && reply.tools.length) info.push("Tools used: " + reply.tools.join(", "));
+  if (info.length) d.appendChild(el("div", "tools", info.join("   |   ")));
   if (reply.sources && reply.sources.length) {
     const det = document.createElement("details");
-    const sum = document.createElement("summary");
-    sum.textContent = "Sources (" + reply.sources.length + ")";
-    det.appendChild(sum);
+    det.appendChild(el("summary", null, "Sources (" + reply.sources.length + ")"));
     const ul = document.createElement("ul");
-    reply.sources.forEach(function (s) {
-      const li = document.createElement("li");
-      li.textContent = s.source + " - " + s.location;
-      ul.appendChild(li);
-    });
+    reply.sources.forEach(function (s) { ul.appendChild(el("li", null, s.source + " - " + s.location)); });
     det.appendChild(ul); d.appendChild(det);
   }
   if (canSpeak && reply.text) {
-    const sp = document.createElement("button");
-    sp.className = "chip"; sp.textContent = "Listen"; sp.dataset.playing = "0";
+    const sp = el("button", "chip", "Listen");
+    sp.dataset.playing = "0";
     sp.onclick = function () { toggleSpeak(sp, reply.text); };
     d.appendChild(sp);
   }
   (reply.chips || []).forEach(function (text) {
-    const b = document.createElement("button");
-    b.className = "chip"; b.textContent = text;
+    const b = el("button", "chip", text);
     b.onclick = function () { send(text); };
     d.appendChild(b);
   });
@@ -230,8 +286,7 @@ function addBot(reply, canSpeak) {
 }
 
 function addWaiting() {
-  const d = document.createElement("div");
-  d.className = "msg bot waiting"; d.textContent = "Thinking...";
+  const d = el("div", "msg bot waiting", "Thinking...");
   chatEl.appendChild(d); scrollDown();
   const t0 = Date.now();
   const timer = setInterval(function () {
@@ -262,10 +317,19 @@ function autosize() {
   input.style.height = Math.min(input.scrollHeight, 160) + "px";
 }
 
-// ---- Saved chats (the sidebar) ----
+// ---- Sidebar: show or hide ----
+function isNarrow() { return window.matchMedia("(max-width: 800px)").matches; }
+
+function toggleSide() {
+  if (isNarrow()) { sideEl.classList.toggle("open"); return; }
+  appEl.classList.toggle("collapsed");
+  localStorage.setItem("sideCollapsed", appEl.classList.contains("collapsed") ? "1" : "0");
+}
+
+// ---- Saved chats ----
 function iconBtn(label, title, handler) {
-  const b = document.createElement("button");
-  b.className = "icon act"; b.textContent = label; b.title = title; b.onclick = handler;
+  const b = el("button", "icon act", label);
+  b.title = title; b.onclick = handler;
   return b;
 }
 
@@ -273,10 +337,9 @@ async function refreshList() {
   const chats = await api("GET", "/api/chats");
   listEl.innerHTML = "";
   chats.forEach(function (c) {
-    const row = document.createElement("div");
-    row.className = "item" + (c.id === currentChat ? " active" : "");
-    const t = document.createElement("span");
-    t.className = "t"; t.textContent = c.title; t.dir = "auto";
+    const row = el("div", "item" + (c.id === currentChat ? " active" : ""));
+    const t = el("span", "t", c.title);
+    t.dir = "auto";
     row.appendChild(t);
     row.appendChild(iconBtn("\u270E", "Rename", function (e) { e.stopPropagation(); renameChat(c); }));
     row.appendChild(iconBtn("\u2715", "Delete", function (e) { e.stopPropagation(); deleteChat(c); }));
@@ -345,11 +408,13 @@ async function send(text) {
       currentChat = created.id;
       localStorage.setItem("lastChat", created.id);
     }
-    const j = await api("POST", "/api/chat", { chat_id: currentChat, message: text });
+    const j = await api("POST", "/api/chat", {
+      chat_id: currentChat, message: text, language: langEl.value, backend: backendEl.value
+    });
     // the answer is prepared in the background: ask for it every 2 seconds
     let result = null, failures = 0;
     while (!result) {
-      await new Promise(function (ok) { setTimeout(ok, 2000); });
+      await sleep(2000);
       try {
         const data = await api("GET", "/api/result/" + j.job_id);
         if (data.status === "error") throw new Error(data.error);
@@ -361,7 +426,8 @@ async function send(text) {
     }
     waiting.stop();
     messageCount += 2;
-    addBot({ text: result.reply, tools: result.tools, sources: result.sources, media: result.media }, true);
+    addBot({ text: result.reply, tools: result.tools, sources: result.sources,
+             media: result.media, model: result.model }, true);
     refreshList();
   } catch (e) {
     waiting.stop();
@@ -424,6 +490,7 @@ async function toggleMic() {
 async function uploadVoice(blob) {
   setStatus("Turning your voice into text...");
   const fd = new FormData(); fd.append("audio", blob, "voice");
+  fd.append("language", langEl.value);
   try {
     const r = await fetch("/api/transcribe", { method: "POST", body: fd });
     const j = await r.json();
@@ -439,17 +506,221 @@ async function uploadVoice(blob) {
   }
 }
 
+// ---- Pop-up panels ----
+const GROUP_NAMES = { slides: "Lecture slides", homework: "Homework", other: "Books and other",
+                      answers: "Hidden answer key" };
+
+function showModal(title) { mtitle.textContent = title; mbody.innerHTML = ""; modalEl.classList.remove("hidden"); }
+function hideModal() { modalEl.classList.add("hidden"); }
+
+async function openMaterials(note) {
+  showModal("Course materials");
+  const add = el("div", "card");
+  add.appendChild(el("b", null, "Add new files"));
+  add.appendChild(el("p", "muted", "PDF, PPTX, PPT or TXT. File names containing 'solution' or 'answer' " +
+    "become hidden answer keys. Names containing 'hw', 'homework' or 'question' count as homework. " +
+    "Big books can take several minutes."));
+  const picker = document.createElement("input");
+  picker.type = "file"; picker.multiple = true; picker.accept = ".pdf,.pptx,.ppt,.txt";
+  const go = el("button", "small", "Upload and add");
+  go.style.marginLeft = "8px";
+  const progress = el("p", "muted", note || "");
+  go.onclick = function () {
+    if (picker.files.length) uploadMaterials(Array.from(picker.files), progress, go);
+  };
+  add.appendChild(picker); add.appendChild(go); add.appendChild(progress);
+  mbody.appendChild(add);
+
+  const box = el("div", "card", "Loading...");
+  mbody.appendChild(box);
+  try {
+    const files = await api("GET", "/api/materials");
+    box.textContent = "";
+    box.appendChild(el("b", null, "In the tutor's knowledge (" + files.length + " files)"));
+    files.forEach(function (f) {
+      const row = el("div", "row");
+      row.appendChild(el("span", "grow", f.name));
+      row.appendChild(el("span", "muted", (GROUP_NAMES[f.group] || f.group) + " - " + f.pieces + " pieces"));
+      const del = el("button", "small danger", "Remove");
+      del.onclick = async function () {
+        if (!confirm("Remove " + f.name + " from the tutor's knowledge?")) return;
+        try {
+          await api("DELETE", "/api/materials/" + encodeURIComponent(f.name));
+          openMaterials("Removed " + f.name);
+        } catch (e) { setStatus("Could not remove: " + e.message, 6000); }
+      };
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  } catch (e) {
+    box.textContent = "Could not load the list: " + e.message;
+  }
+}
+
+async function uploadMaterials(files, progress, button) {
+  button.disabled = true;
+  const report = [];
+  for (const f of files) {
+    progress.textContent = "Uploading " + f.name + "...";
+    try {
+      const fd = new FormData(); fd.append("file", f, f.name);
+      const r = await fetch("/api/materials", { method: "POST", body: fd });
+      let j = null; try { j = await r.json(); } catch (e) {}
+      if (!r.ok) throw new Error((j && j.detail) || ("Error " + r.status));
+      while (true) {
+        await sleep(2000);
+        const s = await api("GET", "/api/result/" + j.job_id);
+        if (s.status === "working") {
+          progress.textContent = "Adding " + f.name + "... " + (s.message || "") + " (" + s.seconds + "s)";
+          continue;
+        }
+        if (s.status === "error") throw new Error(s.error);
+        report.push(s.name + ": " + s.pieces + " pieces (" + (GROUP_NAMES[s.group] || s.group) + ")");
+        break;
+      }
+    } catch (e) {
+      report.push(f.name + ": FAILED - " + e.message);
+    }
+  }
+  openMaterials("Done. " + report.join("  |  "));
+}
+
+function field(parent, label, kind) {
+  const wrap = el("label", "field");
+  wrap.appendChild(el("span", null, label));
+  const box = document.createElement(kind);
+  if (kind === "textarea") box.rows = 2;
+  wrap.appendChild(box);
+  parent.appendChild(wrap);
+  return box;
+}
+
+function parseParams(text) {
+  return text.split("\n").map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) {
+    const i = l.indexOf(":");
+    return i === -1 ? { name: l, description: "" }
+                    : { name: l.slice(0, i).trim(), description: l.slice(i + 1).trim() };
+  });
+}
+
+function parseValues(text) {
+  const values = {};
+  text.split(",").forEach(function (part) {
+    const i = part.indexOf("=");
+    if (i !== -1) values[part.slice(0, i).trim()] = parseFloat(part.slice(i + 1));
+  });
+  return values;
+}
+
+async function openTools(note) {
+  showModal("Tools");
+  let data;
+  try { data = await api("GET", "/api/tools"); }
+  catch (e) { mbody.appendChild(el("p", "muted", "Could not load the tools: " + e.message)); return; }
+
+  const custom = el("div", "card");
+  custom.appendChild(el("b", null, "Your formula tools (" + data.custom.length + ")"));
+  if (!data.custom.length) custom.appendChild(el("p", "muted", "None yet. Add one below."));
+  data.custom.forEach(function (t) {
+    const row = el("div", "row");
+    const info = el("span", "grow");
+    info.appendChild(el("b", null, t.name));
+    info.appendChild(document.createTextNode(" = " + t.formula + (t.unit ? "  [" + t.unit + "]" : "")));
+    info.appendChild(el("div", "muted", t.description));
+    row.appendChild(info);
+    const del = el("button", "small danger", "Delete");
+    del.onclick = async function () {
+      if (!confirm("Delete the tool " + t.name + "?")) return;
+      try { await api("DELETE", "/api/tools/" + encodeURIComponent(t.name)); openTools("Deleted " + t.name); }
+      catch (e) { setStatus("Could not delete: " + e.message, 6000); }
+    };
+    row.appendChild(del);
+    custom.appendChild(row);
+  });
+  mbody.appendChild(custom);
+
+  const form = el("div", "card");
+  form.appendChild(el("b", null, "Add a new math tool"));
+  form.appendChild(el("p", "muted", "Example: name queuing_delay; parameters 'N: packets ahead in the queue', " +
+    "'L: packet length in bits', 'R: link rate in bits per second'; formula N * L / R; unit seconds."));
+  const fName = field(form, "Tool name (English letters, digits and _)", "input");
+  const fDesc = field(form, "What it calculates and when the tutor should use it", "textarea");
+  const fParams = field(form, "Parameters, one per line, written as   name: meaning", "textarea");
+  const fFormula = field(form, "Formula using the parameter names, for example   N * L / R", "input");
+  const fUnit = field(form, "Unit of the result (optional)", "input");
+  const fTest = field(form, "Test values (optional), for example   N=3, L=12000, R=1000000", "input");
+  const msg = el("p", "muted", note || "");
+  const tryBtn = el("button", "small", "Try formula");
+  const saveBtn = el("button", "small", "Save tool");
+  saveBtn.style.marginLeft = "8px";
+  tryBtn.onclick = async function () {
+    try {
+      const r = await api("POST", "/api/tools/test", { formula: fFormula.value, values: parseValues(fTest.value) });
+      msg.textContent = "Result: " + r.result + (fUnit.value ? " " + fUnit.value : "");
+    } catch (e) { msg.textContent = e.message; }
+  };
+  saveBtn.onclick = async function () {
+    try {
+      const spec = await api("POST", "/api/tools", {
+        name: fName.value, description: fDesc.value, params: parseParams(fParams.value),
+        formula: fFormula.value, unit: fUnit.value
+      });
+      openTools("Saved " + spec.name + ". The tutor can use it from your next message.");
+    } catch (e) { msg.textContent = e.message; }
+  };
+  form.appendChild(tryBtn); form.appendChild(saveBtn); form.appendChild(msg);
+  mbody.appendChild(form);
+
+  const builtIn = el("details", "card");
+  builtIn.appendChild(el("summary", null, "Built-in tools (" + data.builtin.length + ")"));
+  data.builtin.forEach(function (t) {
+    const row = el("div", "row");
+    const s = el("span", "grow");
+    s.appendChild(el("b", null, t.name));
+    s.appendChild(el("div", "muted", t.about));
+    row.appendChild(s);
+    builtIn.appendChild(row);
+  });
+  mbody.appendChild(builtIn);
+}
+
+async function checkStatus() {
+  try {
+    const s = await api("GET", "/api/status");
+    const local = backendEl.querySelector('option[value="local"]');
+    if (s.local_ready) {
+      local.disabled = false;
+      local.textContent = "Local model (" + s.local_model + ")";
+    } else {
+      local.disabled = true;
+      local.textContent = "Local model (" + (s.local_running ? s.local_model + " not downloaded" : "Ollama not running") + ")";
+      if (backendEl.value === "local") backendEl.value = "auto";
+    }
+  } catch (e) {}
+}
+
 // ---- Buttons, keys and start-up ----
+langEl.value = localStorage.getItem("lang") || "auto";
+langEl.onchange = function () { localStorage.setItem("lang", langEl.value); };
+backendEl.value = localStorage.getItem("backend") || "auto";
+backendEl.onchange = function () { localStorage.setItem("backend", backendEl.value); };
+if (localStorage.getItem("sideCollapsed") === "1") appEl.classList.add("collapsed");
+
 sendBtn.onclick = function () { send(); };
 micBtn.onclick = toggleMic;
 document.getElementById("newChat").onclick = newChat;
-document.getElementById("menu").onclick = function () { sideEl.classList.toggle("open"); };
+document.getElementById("toggleSide").onclick = toggleSide;
+document.getElementById("openMaterials").onclick = function () { openMaterials(); };
+document.getElementById("openTools").onclick = function () { openTools(); };
+document.getElementById("mclose").onclick = hideModal;
+modalEl.onclick = function (e) { if (e.target === modalEl) hideModal(); };
 input.addEventListener("input", autosize);
 input.addEventListener("keydown", function (e) {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
 });
 
 (async function init() {
+  checkStatus();
   try {
     const chats = await refreshList();
     const last = localStorage.getItem("lastChat");
