@@ -22,10 +22,12 @@ MODEL_CHOICES = [
 ]
 
 _started = None          # the "ollama serve" process RouSanGPT started, if any
+# Talk to Ollama directly: a system proxy (common on Windows) must not get localhost requests
+_local = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def _get(path, timeout=1.5):
-    with urllib.request.urlopen(OLLAMA_URL + path, timeout=timeout) as r:
+    with _local.open(OLLAMA_URL + path, timeout=timeout) as r:
         return json.loads(r.read().decode())
 
 

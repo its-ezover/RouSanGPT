@@ -38,15 +38,31 @@ function Ask($question) {
     return ($answer -eq "" -or $answer -match "^[Yy]")
 }
 function Has-Winget { return [bool](Get-Command winget -ErrorAction SilentlyContinue) }
+# Programs installed during this run are not on this window's PATH yet: read it again
+function Refresh-Path {
+    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $user = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = (@($machine, $user) | Where-Object { $_ }) -join ";"
+}
+# winget exit codes that mean "it is already there"
+$WingetAlreadyThere = @(-1978335189, -1978335135)      # 0x8A15002B, 0x8A150061
 function Winget-Install($id, $what) {
     if (-not (Has-Winget)) { Warn "winget is not available. Install $what yourself."; return $false }
     Say "  Installing $what with winget..."
-    & winget install -e --id $id --accept-package-agreements --accept-source-agreements --scope user 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) {
+    # "--source winget": only the winget catalog. Without it winget also asks the
+    # Microsoft Store, which fails on many networks (certificate errors) and then
+    # stops the whole install.
+    $common = @("install", "-e", "--id", $id, "--source", "winget",
+                "--accept-package-agreements", "--accept-source-agreements")
+    & winget @common --scope user 2>&1 | Out-Host
+    $code = $LASTEXITCODE
+    if ($code -ne 0 -and $WingetAlreadyThere -notcontains $code) {
         # some packages (Graphviz) only offer a machine-wide installer
-        & winget install -e --id $id --accept-package-agreements --accept-source-agreements 2>&1 | Out-Host
+        & winget @common 2>&1 | Out-Host
+        $code = $LASTEXITCODE
     }
-    return ($LASTEXITCODE -eq 0)
+    Refresh-Path
+    return ($code -eq 0 -or $WingetAlreadyThere -contains $code)
 }
 
 # Find a program on PATH or in the usual install folders (same places as binaries.py)
@@ -73,34 +89,73 @@ Write-Host ""
 
 # ---------- 1. Python ----------
 Say "Checking the programs RouSanGPT uses"
+# Versions that every package has ready-made downloads for, best first. A newer
+# Python may work, but some packages may not support it yet.
+$GoodPythons = @("3.12", "3.13", "3.11", "3.14", "3.10")
+# The new "Python install manager" behind py.exe may offer to download a missing
+# version and wait for an answer: never let it do that here.
+$env:PYTHON_MANAGER_AUTOMATIC_INSTALL = "false"
+$env:PYTHON_MANAGER_CONFIRM = "false"
+$script:OtherPython = $null
+
+function Python-Info($exe) {
+    # @(version, full path) of a working python.exe, or $null
+    if (-not $exe -or -not (Test-Path $exe)) { return $null }
+    $out = $null | & $exe -c "import sys; print('%d.%d' % sys.version_info[:2]); print(sys.executable)" 2>$null
+    if ($LASTEXITCODE -ne 0 -or @($out).Count -lt 2) { return $null }
+    return @(([string]@($out)[0]).Trim(), ([string]@($out)[1]).Trim())
+}
 function Find-Python {
-    # The py launcher knows every installed Python. 3.12 has the best package support.
+    $candidates = @()
+    # the py launcher knows every installed Python ("$null |": it must never wait for input)
     if (Get-Command py -ErrorAction SilentlyContinue) {
-        foreach ($v in @("3.12", "3.13", "3.11", "3.10", "3.14")) {
-            $exe = & py "-$v" -c "import sys; print(sys.executable)" 2>$null
-            if ($LASTEXITCODE -eq 0 -and $exe) { return $exe.Trim() }
+        foreach ($v in $GoodPythons) {
+            $out = $null | & py "-$v" -c "import sys; print(sys.executable)" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $out) { $candidates += ([string]@($out)[-1]).Trim() }
         }
     }
-    $cmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.Source -notlike "*WindowsApps*") {      # skip the Microsoft Store stub
-        & $cmd.Source -c "import sys; sys.exit(sys.version_info < (3, 10))" 2>$null
-        if ($LASTEXITCODE -eq 0) { return $cmd.Source }
+    # python.exe on PATH, except the Microsoft Store shortcut in WindowsApps
+    $candidates += @(Get-Command python -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.Source -notlike "*\WindowsApps\*" } | ForEach-Object { $_.Source })
+    # the usual install folders, any version (python.org per-user and all-users,
+    # the Python install manager)
+    foreach ($pattern in @((Join-Path $env:LOCALAPPDATA "Programs\Python\Python3*\python.exe"),
+                           (Join-Path $env:ProgramFiles "Python3*\python.exe"),
+                           (Join-Path $env:LOCALAPPDATA "Python\pythoncore-3*\python.exe"))) {
+        $candidates += @(Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
     }
-    foreach ($v in @("312", "313", "311", "310")) {
-        $exe = Join-Path $env:LOCALAPPDATA "Programs\Python\Python$v\python.exe"
-        if (Test-Path $exe) { return $exe }
+    $byVersion = @{}
+    foreach ($exe in $candidates) {
+        $info = Python-Info $exe
+        if ($info -and -not $byVersion.ContainsKey($info[0])) { $byVersion[$info[0]] = $info[1] }
+    }
+    foreach ($v in $GoodPythons) {
+        if ($byVersion.ContainsKey($v)) { return $byVersion[$v] }
+    }
+    # only a Python newer than the tested ones: kept as a last resort
+    foreach ($v in $byVersion.Keys) {
+        $parts = $v.Split(".")
+        if ([int]$parts[0] -eq 3 -and [int]$parts[1] -gt 14) { $script:OtherPython = $byVersion[$v] }
     }
     return $null
 }
 $Python = Find-Python
 if (-not $Python) {
-    Fail "Python 3.10 or newer is needed."
+    if ($script:OtherPython) {
+        Warn "Only a very new Python was found ($script:OtherPython). Some packages may not support it yet."
+    } else {
+        Fail "Python 3.10 to 3.14 is needed (3.12 is best)."
+    }
     if ((Has-Winget) -and (Ask "  Install Python 3.12 now with winget?")) {
         Winget-Install "Python.Python.3.12" "Python 3.12" | Out-Null
         $Python = Find-Python
     }
+    if (-not $Python -and $script:OtherPython) {
+        Warn "Trying with $script:OtherPython."
+        $Python = $script:OtherPython
+    }
     if (-not $Python) {
-        Write-Host "      Install Python 3.12 from https://www.python.org/downloads/ (or: winget install -e --id Python.Python.3.12)"
+        Write-Host "      Install Python 3.12 from https://www.python.org/downloads/ (or: winget install -e --id Python.Python.3.12 --source winget)"
         Write-Host "      then run install.cmd again."
         exit 1
     }
@@ -131,7 +186,7 @@ if ($ToInstall.Count -gt 0) {
         }
     } else {
         foreach ($t in $ToInstall) {
-            Write-Host "      $($t.What): winget install -e --id $($t.Id)"
+            Write-Host "      $($t.What): winget install -e --id $($t.Id) --source winget"
             $Missing += $t.What
         }
     }
@@ -148,7 +203,7 @@ function Running-Port {
     if (-not (Test-Path $info)) { return $null }
     try {
         $port = (Get-Content $info -Raw | ConvertFrom-Json).port
-        $status = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/status" -TimeoutSec 2
+        $status = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/status" -TimeoutSec 2
         if ($status.app -eq "RouSanGPT") { return $port }
     } catch { }
     return $null
@@ -156,7 +211,7 @@ function Running-Port {
 $port = Running-Port
 if ($port) {
     Say "RouSanGPT is running. Closing it so it can be updated..."
-    try { Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/quit" -TimeoutSec 5 | Out-Null } catch { }
+    try { Invoke-RestMethod -UseBasicParsing -Method Post -Uri "http://127.0.0.1:$port/api/quit" -TimeoutSec 5 | Out-Null } catch { }
     for ($i = 0; $i -lt 30 -and (Running-Port); $i++) { Start-Sleep -Seconds 1 }
     if (Running-Port) { Fail "Please close the RouSanGPT window and run the installer again."; exit 1 }
 }
@@ -186,19 +241,44 @@ Ok "Program copied (your .env, chats and course files are not part of the progra
 Say "Installing the Python packages (the first time this takes a few minutes)"
 $VenvPython = Join-Path $Venv "Scripts\python.exe"
 $VenvPythonW = Join-Path $Venv "Scripts\pythonw.exe"
-if ((Test-Path $VenvPython)) {
-    & $VenvPython -c "import sys" 2>$null
-    if ($LASTEXITCODE -ne 0) { Remove-Item -Recurse -Force $Venv }     # broken venv
+if (Test-Path $Venv) {
+    # start again when the environment is broken or made with another Python version
+    $venvInfo = Python-Info $VenvPython
+    $wanted = Python-Info $Python
+    if (-not $venvInfo -or -not $wanted -or $venvInfo[0] -ne $wanted[0]) {
+        Remove-Item -Recurse -Force $Venv -ErrorAction SilentlyContinue
+    }
 }
 if (-not (Test-Path $VenvPython)) {
     & $Python -m venv $Venv
-    if ($LASTEXITCODE -ne 0) { Fail "Could not create the Python environment."; exit 1 }
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $VenvPython)) { Fail "Could not create the Python environment."; exit 1 }
 }
-& $VenvPython -m pip install --quiet --upgrade pip
-& $VenvPython -m pip install --quiet --upgrade -r (Join-Path $App "requirements.txt")
+$PipOptions = @("--quiet", "--disable-pip-version-check", "--prefer-binary")
+& $VenvPython -m pip install @PipOptions --upgrade pip
+& $VenvPython -m pip install @PipOptions --upgrade -r (Join-Path $App "requirements.txt")
 if ($LASTEXITCODE -ne 0) {
     Fail "Installing the Python packages failed (see above). Check the internet connection and run install.cmd again."
     exit 1
+}
+
+# Load the packages once: a missing Microsoft Visual C++ runtime only shows up here
+# ("DLL load failed"), and the app would otherwise fail without a word.
+$CheckImports = "import chromadb, onnxruntime, fastapi, uvicorn, google.genai, pptx, pypdf, matplotlib, PIL, numpy, edge_tts, psutil, truststore"
+function Packages-Load {
+    $null | & $VenvPython -X utf8 -c $CheckImports 2>&1 | Out-Host
+    return ($LASTEXITCODE -eq 0)
+}
+if (-not (Packages-Load)) {
+    Warn "Some Python packages could not be loaded. Usually the Microsoft Visual C++ runtime is missing."
+    if ((Has-Winget) -and (Ask "  Install the Microsoft Visual C++ runtime now with winget?")) {
+        Winget-Install "Microsoft.VCRedist.2015+.x64" "Microsoft Visual C++ runtime" | Out-Null
+    } else {
+        Write-Host "      Download it from https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    }
+    if (-not (Packages-Load)) {
+        Fail "The Python packages still do not load (see the message above). Install the Visual C++ runtime and run install.cmd again."
+        exit 1
+    }
 }
 Ok "Python packages installed"
 
@@ -252,12 +332,17 @@ Ok "Start menu: RouSanGPT"
 if ($DesktopShortcut) { Ok "Desktop shortcut" }
 
 # A console version, handy when something goes wrong
+# (UTF-8 without BOM and "chcp 65001", so a user name with Arabic or other non-English
+# letters in the path still works; ASCII would turn those letters into "?")
 $cmdFile = Join-Path $Root "rousangpt-console.cmd"
-Set-Content -Path $cmdFile -Encoding ASCII -Value @(
+$cmdLines = @(
     "@echo off",
+    "chcp 65001 >nul",
     "rem RouSanGPT with its messages shown in this window (for troubleshooting)",
-    "`"$VenvPython`" -X utf8 `"$App\launcher.py`" --data-dir `"$Data`" --console %*"
+    "`"$VenvPython`" -X utf8 `"$App\launcher.py`" --data-dir `"$Data`" --console %*",
+    "pause"
 )
+[IO.File]::WriteAllText($cmdFile, ($cmdLines -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding $false))
 
 New-Item -Path $UninstallKey -Force | Out-Null
 $props = @{
@@ -282,3 +367,4 @@ if ($Missing.Count -gt 0) {
     Write-Host ""
     Warn "Still missing: $($Missing -join ', '). The rest of the app works."
 }
+exit 0

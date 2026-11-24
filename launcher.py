@@ -44,6 +44,9 @@ CHROMIUM_BROWSERS = ["chromium", "chromium-browser", "google-chrome-stable", "go
                      "vivaldi-stable", "vivaldi"]
 FIREFOX_BROWSERS = ["firefox", "firefox-esr", "librewolf"]
 WINDOWS = sys.platform.startswith("win")
+# Requests to our own server go straight to it, never through a system proxy
+# (Windows proxy settings would otherwise apply to 127.0.0.1 too)
+_local = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 # Where browsers live on Windows (they are usually not on PATH)
 _WIN_BROWSERS = {
@@ -140,7 +143,7 @@ def running_server():
     try:
         info = json.loads(SERVER_FILE.read_text())
         url = f"http://{HOST}:{int(info['port'])}"
-        with urllib.request.urlopen(url + "/api/status", timeout=3) as r:
+        with _local.open(url + "/api/status", timeout=3) as r:
             if json.loads(r.read().decode()).get("app") == APP_NAME:
                 return url
     except Exception:
@@ -315,7 +318,7 @@ def main():
             notify("Could not start. See the log in " + str(LOG_FILE))
             sys.exit(1)
         try:
-            with urllib.request.urlopen(url + "/api/status", timeout=2):
+            with _local.open(url + "/api/status", timeout=2):
                 break
         except Exception:
             pass

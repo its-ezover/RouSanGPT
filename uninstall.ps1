@@ -15,10 +15,10 @@ $info = Join-Path $Data "server.json"
 if (Test-Path $info) {
     try {
         $port = (Get-Content $info -Raw | ConvertFrom-Json).port
-        $status = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/status" -TimeoutSec 2
+        $status = Invoke-RestMethod -UseBasicParsing -Uri "http://127.0.0.1:$port/api/status" -TimeoutSec 2
         if ($status.app -eq "RouSanGPT") {
             Write-Host "Closing RouSanGPT..."
-            Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/quit" -TimeoutSec 5 | Out-Null
+            Invoke-RestMethod -UseBasicParsing -Method Post -Uri "http://127.0.0.1:$port/api/quit" -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 3
         }
     } catch { }

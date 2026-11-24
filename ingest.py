@@ -63,7 +63,7 @@ def read_ppt(path):
 
 def read_txt(path):
     # keep link files in small groups of lines so links never get cut in half
-    lines = path.read_text(errors="ignore").splitlines()
+    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     for i in range(0, len(lines), 4):
         yield f"lines {i + 1}-{i + 4}", "\n".join(lines[i:i + 4])
 

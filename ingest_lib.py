@@ -51,7 +51,8 @@ def read_ppt(path, progress=None):
     if soffice:
         if progress:
             progress("converting the old .ppt file")
-        with tempfile.TemporaryDirectory() as tmp:
+        # (LibreOffice on Windows may still hold the folder for a moment when it ends)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             subprocess.run([soffice, "--headless", "--convert-to", "pptx", "--outdir", tmp, str(path)],
                            capture_output=True, timeout=300, **binaries.NO_WINDOW)
             converted = Path(tmp) / (Path(path).stem + ".pptx")
@@ -67,7 +68,7 @@ def read_ppt(path, progress=None):
 
 
 def read_txt(path, progress=None):
-    lines = Path(path).read_text(errors="ignore").splitlines()
+    lines = Path(path).read_text(encoding="utf-8", errors="ignore").splitlines()
     for i in range(0, len(lines), 4):
         yield f"lines {i + 1}-{i + 4}", "\n".join(lines[i:i + 4])
 

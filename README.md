@@ -170,14 +170,16 @@ cd RouSanGPT && git pull && ./install.sh     # update; your data is kept
 2. Open the folder and **double-click `install.cmd`**.
 
 The installer needs **no administrator rights** for the app itself. It:
-1. finds Python (3.12 is recommended because every package has ready-made
-   downloads for it). If Python is missing it offers to install it with `winget`;
+1. finds Python 3.10 to 3.14 (3.12 is preferred because every package has
+   ready-made downloads for it). If none is installed it offers to install 3.12 with
+   `winget`;
 2. checks FFmpeg (videos, animations, voice input) and Graphviz (diagrams) and
    offers to install the missing ones with `winget`. Graphviz's own installer may
    ask for permission. LibreOffice (old `.ppt` files) and Ollama (local model) are
    optional;
-3. copies the program to `%LOCALAPPDATA%\RouSanGPT\app` and installs the Python
-   packages (a few minutes the first time);
+3. copies the program to `%LOCALAPPDATA%\RouSanGPT\app`, installs the Python
+   packages (a few minutes the first time) and checks that they load (if the
+   Microsoft Visual C++ runtime is missing, it offers to install it);
 4. adds **RouSanGPT** to the Start menu with its icon, and to **Settings > Apps**
    (for uninstalling).
 
@@ -225,6 +227,19 @@ Close the window and RouSanGPT stops by itself, or use **Settings > Quit RouSanG
   > Microphone > "Let desktop apps access your microphone".
 - **The script is blocked:** use `install.cmd` (not `install.ps1` directly); it
   starts PowerShell with permission to run the script.
+- **"install.ps1 was not found":** the ZIP was not extracted. Right-click it,
+  choose **Extract All**, and run `install.cmd` from the extracted folder.
+- **winget: "Failed when searching source: msstore ... The server certificate did
+  not match":** the Microsoft Store catalog is blocked on this network (a proxy or an
+  antivirus that inspects HTTPS). The installer only uses the `winget` catalog, so
+  this no longer stops it. To silence it everywhere, run in an administrator
+  terminal: `winget source disable msstore`. If every download fails with
+  certificate errors, check that the computer's date and time are correct.
+- **"Some Python packages could not be loaded" / "DLL load failed":** the Microsoft
+  Visual C++ runtime is missing. The installer offers to install it; or download it
+  from https://aka.ms/vs/17/release/vc_redist.x64.exe and run `install.cmd` again.
+- **Only a very new Python is installed:** the installer offers to add Python 3.12
+  next to it (both can stay installed); 3.10 to 3.14 are all fine.
 - **Local model:** install Ollama from https://ollama.com/download. The Ollama app
   keeps its models in `%USERPROFILE%\.ollama\models`.
 
@@ -255,8 +270,8 @@ py -3.12 -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-winget install -e --id Gyan.FFmpeg
-winget install -e --id Graphviz.Graphviz
+winget install -e --id Gyan.FFmpeg --source winget
+winget install -e --id Graphviz.Graphviz --source winget
 ```
 Then paste your Gemini API key into `.env`. On Windows, start Python with
 `-X utf8` (for example `python -X utf8 server.py`) so Arabic text is always read and

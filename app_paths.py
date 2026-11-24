@@ -15,6 +15,16 @@ if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
 else:
     CODE_DIR = Path(__file__).resolve().parent
 
+# Use the certificates Windows trusts for HTTPS (Gemini, voices, downloads). Networks
+# and antivirus programs that inspect HTTPS add their own certificate to Windows;
+# without this, Python would reject every connection on such computers.
+if sys.platform.startswith("win"):
+    try:
+        import truststore
+        truststore.inject_into_ssl()
+    except Exception:
+        pass
+
 # The modules must stay importable after agent.py changes the working folder to DATA_DIR
 if str(CODE_DIR) not in sys.path:
     sys.path.insert(0, str(CODE_DIR))
