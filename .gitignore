@@ -25,3 +25,13 @@ voice_samples/
 *_log.txt
 error*.txt
 chats.db
+
+# desktop app runtime files (data folder)
+settings.json
+settings.tmp
+server.json
+launcher.lock
+logs/
+browser-profile/
+firefox-profile/
+formula_tools.json

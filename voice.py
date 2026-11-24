@@ -1,28 +1,19 @@
 import io
-import os
 import wave
 
-import numpy as np
-import sounddevice as sd
-from dotenv import load_dotenv
-from google import genai
 from google.genai import types
 
-load_dotenv()
+import gemini_client
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    http_options=types.HttpOptions(
-        timeout=60000,
-        retry_options=types.HttpRetryOptions(attempts=1),
-    ),
-)
+client = gemini_client.LazyClient(timeout_ms=60000)   # uses the key from Settings or .env
 MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
 SAMPLE_RATE = 16000
 
 
 def record_until_enter() -> bytes:
     """Record from the microphone until the user presses Enter. Returns WAV bytes."""
+    import numpy as np
+    import sounddevice as sd       # only needed here (the terminal app), not by the web app
     chunks = []
 
     def callback(indata, frames, time_info, status):

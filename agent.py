@@ -5,12 +5,15 @@ import threading
 import time
 from pathlib import Path
 
-os.chdir(Path(__file__).resolve().parent)   # always work from the project folder
+import app_paths
+
+os.chdir(app_paths.DATA_DIR)   # always work from the data folder (the repo folder in dev mode)
 
 import chromadb
-from dotenv import load_dotenv
-from google import genai
 from google.genai import types
+
+import gemini_client
+import settings
 
 import animation_tools
 import diagram_tools
@@ -24,24 +27,20 @@ from quiz import QUIZ_TOOLS
 from tools import ALL_TOOLS
 from video_tools import VIDEO_TOOLS
 
-load_dotenv()
-
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    http_options=types.HttpOptions(
-        timeout=45000,
-        retry_options=types.HttpRetryOptions(attempts=1),
-    ),
-)
+client = gemini_client.LazyClient(timeout_ms=45000)   # uses the key from Settings or .env
 
 # Online models, in order. If one fails, we switch and stay on the new one.
 MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
-# Local model (Ollama). Change it in .env with LOCAL_MODEL=...
-LOCAL_MODEL = os.getenv("LOCAL_MODEL", "qwen2.5:7b")
+
+
+def local_model():
+    """The local (Ollama) model: chosen in Settings, or LOCAL_MODEL in .env."""
+    return settings.local_model()
+
 
 # ---- The search database ----
 db = chromadb.PersistentClient(path="course_db")
-collection = db.get_collection("course")
+collection = db.get_or_create_collection("course")   # empty on a fresh install
 
 ANSWER_KEY_WORDS = ["solution", "answer"]            # hidden from the tutor
 HOMEWORK_WORDS = ["hw", "homework", "question"]      # labelled as homework
@@ -212,11 +211,10 @@ def warm_up():
 
 def local_available():
     """Is Ollama running? Returns (running, list of downloaded model names)."""
-    try:
-        import ollama
-        return True, [m.model for m in ollama.list().models]
-    except Exception:
+    import local_ai
+    if local_ai.server_version() is None:
         return False, []
+    return True, [m["name"] for m in local_ai.installed_models()]
 
 
 _media = threading.local()
@@ -416,6 +414,7 @@ class Session:
             recent = recent[1:]
         self.chat = make_chat(MODELS[self.model_index], history=_to_contents(recent))
         self.tools_version = TOOLS_VERSION
+        self.key_version = gemini_client.key_version()
         self.gemini_stale = False
 
     def send(self, prompt):
@@ -433,7 +432,8 @@ class Session:
         raise RuntimeError("All online models failed right now. Please try again in a minute.")
 
     def _ask_gemini(self, prompt):
-        if self.chat is None or self.tools_version != TOOLS_VERSION or self.gemini_stale:
+        if (self.chat is None or self.tools_version != TOOLS_VERSION or self.gemini_stale
+                or self.key_version != gemini_client.key_version()):
             self._fresh_gemini_chat()
         reply = self.send(prompt)
         return reply.text or "", tools_used(reply), saved_paths(reply), MODELS[self.model_index]
@@ -447,10 +447,11 @@ class Session:
                              "content": m["text"]})
         messages.append({"role": "user", "content": prompt})
         names, paths = [], []
-        label = f"local: {LOCAL_MODEL}"
+        model = local_model()
+        label = f"local: {model}"
         self.gemini_stale = True                 # Gemini's memory misses this turn
         for _ in range(6):                       # at most 6 rounds of tool use
-            response = ollama.chat(model=LOCAL_MODEL, messages=messages,
+            response = ollama.chat(model=model, messages=messages,
                                    tools=list(TOOL_MAP.values()))
             message = response.message
             if not message.tool_calls:
@@ -489,6 +490,11 @@ class Session:
             f"[{kind}: {m['source']} - {m['location']}]\n{d}" for kind, d, m in found
         )
         note = LANGUAGE_NOTES.get(language, LANGUAGE_NOTES["auto"])
+        if not found:
+            context = ("(No course material matched this question"
+                       + (", because no course files have been added yet" if not collection.count() else "")
+                       + ". Answer from your general Computer Networks knowledge and say briefly "
+                       "that this answer is not based on the course materials.)")
         prompt = (f"Course material excerpts:\n{context}\n\n"
                   f"Student message: {question}\n\n({note})")
 

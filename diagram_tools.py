@@ -2,6 +2,8 @@ import subprocess
 import textwrap
 from pathlib import Path
 
+import binaries
+
 
 def _clean_name(name):
     safe = "".join(c for c in name if c.isalnum() or c in "-_")
@@ -10,11 +12,7 @@ def _clean_name(name):
 
 def _open_image(path):
     """Open the picture in the computer's default image viewer."""
-    try:
-        subprocess.Popen(["xdg-open", str(path)],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
-        pass
+    binaries.open_file(path)
 
 
 def draw_topology(dot_code: str, name: str) -> dict:
@@ -31,13 +29,16 @@ def draw_topology(dot_code: str, name: str) -> dict:
     dot_file = Path("diagrams") / f"{safe}.dot"
     png_file = Path("diagrams") / f"{safe}.png"
     dot_file.write_text(dot_code)
+    dot = binaries.find_tool("dot")
+    if dot is None:
+        return {"error": str(binaries.ToolMissing("dot"))}
     try:
         result = subprocess.run(
-            ["dot", "-Tpng", str(dot_file), "-o", str(png_file)],
+            [dot, "-Tpng", str(dot_file), "-o", str(png_file)],
             capture_output=True, text=True, timeout=30,
         )
-    except FileNotFoundError:
-        return {"error": "Graphviz is not installed on this computer."}
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"error": f"Graphviz could not run: {e}"}
     if result.returncode != 0:
         return {"error": "Graphviz could not draw this DOT code: " + result.stderr[:300]}
     _open_image(png_file)

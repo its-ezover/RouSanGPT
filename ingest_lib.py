@@ -1,11 +1,12 @@
 import logging
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 from pypdf import PdfReader
 from pptx import Presentation
+
+import binaries
 
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 SUPPORTED = (".pdf", ".pptx", ".ppt", ".txt")
@@ -46,7 +47,7 @@ def read_pptx(path, progress=None):
 
 def read_ppt(path, progress=None):
     """Old .ppt: convert with LibreOffice if installed, otherwise use catppt."""
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    soffice = binaries.find_tool("soffice") or binaries.find_tool("libreoffice")
     if soffice:
         if progress:
             progress("converting the old .ppt file")
@@ -57,7 +58,11 @@ def read_ppt(path, progress=None):
             if converted.exists():
                 yield from read_pptx(converted, progress)
                 return
-    result = subprocess.run(["catppt", str(path)], capture_output=True, text=True)
+    catppt = binaries.find_tool("catppt")
+    if catppt is None:
+        raise RuntimeError("Old .ppt files need LibreOffice or catdoc. "
+                           + str(binaries.ToolMissing("soffice")))
+    result = subprocess.run([catppt, str(path)], capture_output=True, text=True)
     yield "all slides", result.stdout
 
 

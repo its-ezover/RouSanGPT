@@ -28,8 +28,78 @@ free tools.
   hidden from the tutor.
 
 ## Current status
-The assistant currently runs as a **terminal application on PC**.
-The desktop and mobile app interfaces are [in progress / describe their status].
+RouSanGPT runs as a **Linux desktop app** (see below), as a web app in the browser
+(`python server.py`) and as a terminal app (`python chat.py`).
+
+## Linux app
+### Install (one line)
+```
+git clone https://github.com/its-ezover/RouSanGPT.git && cd RouSanGPT && ./install.sh
+```
+The installer needs no `sudo`. It checks the programs RouSanGPT uses and prints the
+install command (Arch, Debian/Ubuntu, Fedora) for anything missing, then installs
+the app for your user and adds **RouSanGPT** to the app menu (Education).
+
+Already used RouSanGPT from this folder? Keep your chats, course database, formula
+tools and videos with:
+```
+./install.sh --import-data ~/path/to/RouSanGPT
+```
+(It also offers to copy the Gemini API key from that folder's `.env`.)
+
+### First run
+Click **RouSanGPT** in the app menu. The window opens after a few seconds. The
+first time, it asks for your free Gemini API key (from
+https://aistudio.google.com/apikey); it is tested and stored only on your
+computer. Then add your course files (PDF, PPTX, PPT, TXT) in **Materials**.
+Without course files the tutor still works and answers from general knowledge.
+
+Clicking the icon again while the app is open just brings up another window.
+Closing the window stops the app (after about 10 seconds). **Settings > Quit
+RouSanGPT** stops it right away.
+
+### Where things are
+| What | Where |
+|---|---|
+| Your data: chats, course database, materials, videos, settings, API key | `~/.local/share/RouSanGPT/data` (or `$XDG_DATA_HOME/RouSanGPT/data`) |
+| Log file | `~/.local/share/RouSanGPT/data/logs/rousangpt.log` |
+| The program and its Python packages | `~/.local/share/RouSanGPT/app` and `.../venv` |
+| Command and menu entry | `~/.local/bin/rousangpt`, `~/.local/share/applications/rousangpt.desktop` |
+
+### Update and uninstall
+- Update: `git pull && ./install.sh` (your data is kept).
+- Uninstall: `./uninstall.sh` (your data is kept), or `./uninstall.sh --purge` to
+  delete the data too (it asks first).
+
+### Local model (optional, works offline)
+Install Ollama (https://ollama.com/download, on Arch `sudo pacman -S ollama`).
+In **Settings > Local model** you can see whether Ollama runs, start it, see a
+model recommended for your computer's memory, download it with a progress bar and
+choose it. Then pick "Local model" at the top of the chat; answers show
+"Answered by: local: ...".
+On Arch, the `ollama` package runs a system service that keeps its models in
+`/var/lib/ollama`, while a manually started `ollama serve` uses `~/.ollama`; the
+panel shows which one is in use. RouSanGPT only starts `ollama serve` if no Ollama
+is answering yet.
+
+### Troubleshooting
+- **The window is a normal browser tab:** no Chromium-based browser or Firefox was
+  found. Install one (`sudo pacman -S chromium`). With a Chromium-based browser
+  (Chromium, Chrome, Brave, Edge, Vivaldi) RouSanGPT opens in its own app window;
+  otherwise it uses Firefox with a separate, tab-less profile.
+- **Microphone:** allow the microphone when the window asks. Voice input needs a
+  Chromium-based browser or Firefox (it does not work in some embedded web views).
+  Check that the microphone works in your system sound settings.
+- **Videos, animations or voice input fail:** FFmpeg is missing
+  (`sudo pacman -S ffmpeg`, `sudo apt install ffmpeg`, `sudo dnf install ffmpeg`).
+- **Topology diagrams fail:** Graphviz is missing (`sudo pacman -S graphviz`,
+  `sudo apt install graphviz`, `sudo dnf install graphviz`).
+- **Nothing happens when clicking the icon:** look at the log file above, or run
+  `~/.local/bin/rousangpt --console` in a terminal to see the messages.
+- The first start downloads the search model (about 80 MB) once, so it needs the
+  internet.
+
+## Dev mode (from the repo)
 
 ## Requirements
 - Python 3.10 or newer (developed with Python 3.14 on Linux, CachyOS)
@@ -57,13 +127,17 @@ database (takes a few minutes):
 ```
 python ingest.py
 ```
-Start the assistant (web interface at 127.0.0.1:8000):
+Start the assistant in the terminal:
+```
+python chat.py
+```
+or as a web app in your browser (http://127.0.0.1:8000):
 ```
 python server.py
 ```
+or as the desktop app, using this folder for data: `python launcher.py`.
 
 ## How to use it (CLI)
-run chat.py
 At the `You:` prompt:
 - Type a question, for example `What is the difference between TCP and UDP?`
 - `/voice` to ask with the microphone, `/paste` for a multi-line question
@@ -76,7 +150,12 @@ At the `You:` prompt:
 ## Project structure
 | File | Purpose |
 |---|---|
-| `chat.py` | main assistant (chat, search, tools, voice command) |
+| `agent.py` | the tutor: search, tools, Gemini and local model |
+| `chat.py` | terminal app |
+| `server.py`, `web/` | web app (FastAPI) and its page |
+| `launcher.py`, `install.sh`, `uninstall.sh` | Linux desktop app |
+| `app_paths.py`, `settings.py`, `binaries.py`, `tts.py`, `gemini_client.py`, `local_ai.py` | data folder, settings, external programs, text-to-speech, Gemini key, Ollama |
+| `history_store.py`, `formula_tools.py`, `ingest_lib.py` | saved chats, formula tools, adding course files |
 | `ingest.py` | reads the course materials into the local search database |
 | `tools.py`, `more_tools.py`, `extra_tools.py` | exact networking calculators |
 | `diagram_tools.py` | diagram drawing tools |
@@ -91,8 +170,8 @@ At the `You:` prompt:
 - Videos are generated in English.
 - AI, voice and text-to-speech need internet. The free Gemini tier can be slow or
   busy at times; the assistant switches models automatically.
-- The program opens images and videos with `xdg-open` (Linux). On other systems the
-  files are still saved in their folders but may not open automatically.
+- The terminal app opens images and videos with the system's default program; the
+  web and desktop app show them inside the chat.
 - Homework detection relies on the homework files and on what the student says, so
   it reduces cheating but cannot prevent it completely.
 

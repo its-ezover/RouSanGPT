@@ -1,6 +1,5 @@
 import math
 import re
-import subprocess
 import tempfile
 from functools import lru_cache
 from pathlib import Path
@@ -8,6 +7,7 @@ from pathlib import Path
 from matplotlib import font_manager
 from PIL import Image, ImageDraw, ImageFont
 
+import binaries
 from more_tools import dijkstra_shortest_paths
 
 W, H, FPS = 1280, 720, 30
@@ -48,14 +48,8 @@ def render_video(frame_fn, duration, out_path):
             if i % 90 == 0:
                 print(f"  (drawing frames {i}/{total}...)", flush=True)
             frame_fn(i / FPS).save(f"{tmp}/f{i:05d}.png", compress_level=1)
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS),
-             "-i", f"{tmp}/f%05d.png", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-             str(out_path)],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError("ffmpeg failed: " + result.stderr[-300:])
+        binaries.run_ffmpeg(["-framerate", str(FPS), "-i", f"{tmp}/f%05d.png",
+                             "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out_path)])
 
 
 def _clean_name(name):
@@ -63,11 +57,7 @@ def _clean_name(name):
 
 
 def _open_file(path):
-    try:
-        subprocess.Popen(["xdg-open", str(path)],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
-        pass
+    binaries.open_file(path)
 
 
 def _finish(name, frame_fn, duration):

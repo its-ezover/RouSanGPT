@@ -1,25 +1,16 @@
 import json
-import os
 import re
 import time
 from pathlib import Path
 from typing import Literal
 
 import chromadb
-from dotenv import load_dotenv
-from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-load_dotenv()
+import gemini_client
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    http_options=types.HttpOptions(
-        timeout=60000,
-        retry_options=types.HttpRetryOptions(attempts=1),
-    ),
-)
+client = gemini_client.LazyClient(timeout_ms=60000)   # uses the key from Settings or .env
 MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
 
 
@@ -49,7 +40,7 @@ def _get_collection():
     global _collection, _slide_files, _other_files
     if _collection is None:
         db = chromadb.PersistentClient(path="course_db")
-        _collection = db.get_collection("course")
+        _collection = db.get_or_create_collection("course")
         names = {m["source"] for m in _collection.get(include=["metadatas"])["metadatas"]}
         _slide_files = sorted(n for n in names if n.lower().endswith((".pptx", ".ppt")))
         # books and other notes only: no solutions, answers or homework files

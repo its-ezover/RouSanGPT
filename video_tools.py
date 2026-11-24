@@ -1,33 +1,23 @@
-import os
 import re
-import subprocess
-import sys
 import tempfile
 import textwrap
 import time
 from pathlib import Path
 from typing import Literal
 
-from dotenv import load_dotenv
-from google import genai
 from google.genai import types
 from matplotlib import font_manager
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
 
 import animation_tools
+import binaries
 import diagram_tools
+import gemini_client
+import tts
 from quiz import _course_excerpts   # finds course material (slides and books only)
 
-load_dotenv()
-
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    http_options=types.HttpOptions(
-        timeout=90000,
-        retry_options=types.HttpRetryOptions(attempts=1),
-    ),
-)
+client = gemini_client.LazyClient(timeout_ms=90000)   # uses the key from Settings or .env
 MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
 VOICES = ["en-US-AvaMultilingualNeural", "en-US-AriaNeural"]   # tried in this order
 VOICE_RATE = "-5%"     # a little slower, like a teacher; try "-10%" for slower
@@ -134,29 +124,11 @@ Fill ONLY the fields of the type you choose; leave all other fields empty
 # ---------- 2. The voice ----------
 
 def text_to_speech(text, out_path):
-    last_error = ""
-    for voice in VOICES:
-        result = subprocess.run(
-            [sys.executable, "-m", "edge_tts", "--voice", voice,
-             f"--rate={VOICE_RATE}", f"--text={text}", "--write-media", str(out_path)],
-            capture_output=True, text=True, timeout=90,
-        )
-        if result.returncode == 0 and Path(out_path).exists():
-            return
-        last_error = result.stderr[-200:]
-    raise RuntimeError("Text-to-speech failed (is the internet working?): " + last_error)
+    tts.synthesize(text, out_path, VOICES, rate=VOICE_RATE)
 
 
 def _audio_seconds(path):
-    result = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-        capture_output=True, text=True,
-    )
-    try:
-        return float(result.stdout.strip())
-    except ValueError:
-        return 10.0
+    return binaries.media_seconds(path, default=10.0)
 
 
 # ---------- 3. The pictures ----------
@@ -270,18 +242,11 @@ def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
 # ---------- 4. Putting it together ----------
 
 def _ffmpeg(args):
-    result = subprocess.run(["ffmpeg", "-y", "-loglevel", "error"] + args,
-                            capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError("ffmpeg failed: " + result.stderr[-300:])
+    binaries.run_ffmpeg(args)
 
 
 def _open_file(path):
-    try:
-        subprocess.Popen(["xdg-open", str(path)],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
-        pass
+    binaries.open_file(path)
 
 
 def create_video(topic: str, num_scenes: int = 5) -> dict:

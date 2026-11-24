@@ -4,9 +4,9 @@ import threading
 import time
 import uuid
 from contextlib import closing
-from pathlib import Path
+from app_paths import CHATS_DB
 
-DB_PATH = Path(__file__).resolve().parent / "chats.db"
+DB_PATH = CHATS_DB
 _lock = threading.Lock()
 
 
