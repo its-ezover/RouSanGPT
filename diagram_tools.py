@@ -28,14 +28,14 @@ def draw_topology(dot_code: str, name: str) -> dict:
     safe = _clean_name(name)
     dot_file = Path("diagrams") / f"{safe}.dot"
     png_file = Path("diagrams") / f"{safe}.png"
-    dot_file.write_text(dot_code)
+    dot_file.write_text(dot_code, encoding="utf-8")
     dot = binaries.find_tool("dot")
     if dot is None:
         return {"error": str(binaries.ToolMissing("dot"))}
     try:
         result = subprocess.run(
             [dot, "-Tpng", str(dot_file), "-o", str(png_file)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, **binaries.NO_WINDOW,
         )
     except (OSError, subprocess.TimeoutExpired) as e:
         return {"error": f"Graphviz could not run: {e}"}

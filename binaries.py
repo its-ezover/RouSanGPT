@@ -1,4 +1,5 @@
 """Finding and using the other programs RouSanGPT needs (ffmpeg, Graphviz, LibreOffice...)."""
+import glob
 import os
 import re
 import shutil
@@ -27,12 +28,19 @@ INSTALL_HINTS = {
 NICE_NAMES = {"ffmpeg": "FFmpeg", "dot": "Graphviz", "soffice": "LibreOffice",
               "catppt": "catdoc (catppt)", "ollama": "Ollama"}
 
-# Usual install folders on Windows (used by the Windows build later)
+# On Windows, programs started from the app must not open a black console window
+NO_WINDOW = {"creationflags": 0x08000000} if WINDOWS else {}
+
+# Usual install folders on Windows (winget, the official installers); glob patterns allowed
+_WINGET = r"%LOCALAPPDATA%\Microsoft\WinGet"
 _WINDOWS_PLACES = {
-    "dot": [r"C:\Program Files\Graphviz\bin"],
-    "soffice": [r"C:\Program Files\LibreOffice\program"],
-    "ffmpeg": [r"C:\ffmpeg\bin"],
-    "ollama": [os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama")],
+    "ffmpeg": [_WINGET + r"\Links", _WINGET + r"\Packages\Gyan.FFmpeg*\*\bin",
+               _WINGET + r"\Packages\BtbN.FFmpeg*\*\bin", r"C:\ffmpeg\bin",
+               r"%ProgramFiles%\ffmpeg\bin"],
+    "dot": [r"%ProgramFiles%\Graphviz\bin", r"%ProgramFiles(x86)%\Graphviz\bin",
+            _WINGET + r"\Links"],
+    "soffice": [r"%ProgramFiles%\LibreOffice\program", r"%ProgramFiles(x86)%\LibreOffice\program"],
+    "ollama": [r"%LOCALAPPDATA%\Programs\Ollama", r"%ProgramFiles%\Ollama"],
 }
 
 
@@ -57,10 +65,11 @@ def find_tool(name):
     if found:
         return found
     if WINDOWS:
-        for folder in _WINDOWS_PLACES.get(name, []):
-            candidate = Path(folder) / exe
-            if candidate.is_file():
-                return str(candidate)
+        for pattern in _WINDOWS_PLACES.get(name, []):
+            for folder in sorted(glob.glob(os.path.expandvars(pattern)), reverse=True):
+                candidate = Path(folder) / exe
+                if candidate.is_file():
+                    return str(candidate)
     return None
 
 
@@ -75,7 +84,7 @@ def require_tool(name):
 def run_ffmpeg(args, timeout=None):
     """Run ffmpeg quietly. Raises RuntimeError with ffmpeg's message on failure."""
     result = subprocess.run([require_tool("ffmpeg"), "-y", "-loglevel", "error"] + list(args),
-                            capture_output=True, text=True, timeout=timeout)
+                            capture_output=True, text=True, timeout=timeout, **NO_WINDOW)
     if result.returncode != 0:
         raise RuntimeError("ffmpeg failed: " + result.stderr[-300:])
     return result
@@ -86,7 +95,7 @@ def media_seconds(path, default=10.0):
     (so ffprobe is not needed)."""
     try:
         result = subprocess.run([require_tool("ffmpeg"), "-hide_banner", "-i", str(path)],
-                                capture_output=True, text=True, timeout=30)
+                                capture_output=True, text=True, timeout=30, **NO_WINDOW)
     except (ToolMissing, subprocess.TimeoutExpired):
         return default
     m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)

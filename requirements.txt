@@ -13,3 +13,4 @@ ollama
 fastapi
 uvicorn
 python-multipart
+psutil

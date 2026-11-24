@@ -365,7 +365,7 @@ def find_existing_video(question):
         if not mp4.exists():
             continue
         try:
-            data = json.loads(script.read_text())
+            data = json.loads(script.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
         topic = data.get("video_title", "") + " " + " ".join(

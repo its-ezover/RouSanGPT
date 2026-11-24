@@ -1363,7 +1363,8 @@ async function renderLocal(box, note) {
     };
     box.appendChild(start);
   } else {
-    const who = { system: "the system service (ollama.service)", app: "started by RouSanGPT", other: "an Ollama started outside RouSanGPT" }[st.runner] || "Ollama";
+    const who = { system: "the system service (ollama.service)", app: "started by RouSanGPT",
+                  "windows-app": "the Ollama app", other: "an Ollama started outside RouSanGPT" }[st.runner] || "Ollama";
     line("Status", "Running, version " + st.version, "ok");
     line("In use", who);
     line("Models stored in", st.models_dir);

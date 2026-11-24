@@ -1,0 +1,4 @@
+# Windows scripts need Windows line endings
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.ico binary

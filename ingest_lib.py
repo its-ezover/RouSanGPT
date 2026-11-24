@@ -53,7 +53,7 @@ def read_ppt(path, progress=None):
             progress("converting the old .ppt file")
         with tempfile.TemporaryDirectory() as tmp:
             subprocess.run([soffice, "--headless", "--convert-to", "pptx", "--outdir", tmp, str(path)],
-                           capture_output=True, timeout=300)
+                           capture_output=True, timeout=300, **binaries.NO_WINDOW)
             converted = Path(tmp) / (Path(path).stem + ".pptx")
             if converted.exists():
                 yield from read_pptx(converted, progress)
@@ -62,7 +62,7 @@ def read_ppt(path, progress=None):
     if catppt is None:
         raise RuntimeError("Old .ppt files need LibreOffice or catdoc. "
                            + str(binaries.ToolMissing("soffice")))
-    result = subprocess.run([catppt, str(path)], capture_output=True, text=True)
+    result = subprocess.run([catppt, str(path)], capture_output=True, text=True, **binaries.NO_WINDOW)
     yield "all slides", result.stdout
 
 

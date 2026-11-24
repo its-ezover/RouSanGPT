@@ -93,6 +93,8 @@ def who_runs_it():
         return None, ""
     if _started is not None and _started.poll() is None:
         return "app", os.environ.get("OLLAMA_MODELS") or str(Path.home() / ".ollama" / "models")
+    if sys.platform.startswith("win"):
+        return "windows-app", os.environ.get("OLLAMA_MODELS") or str(Path.home() / ".ollama" / "models")
     if _system_service_active():
         place = "/var/lib/ollama" if Path("/var/lib/ollama").exists() else "/usr/share/ollama/.ollama"
         return "system", place

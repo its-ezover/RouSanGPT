@@ -60,13 +60,13 @@ def load_specs():
     if not FILE.exists():
         return []
     try:
-        return json.loads(FILE.read_text())
+        return json.loads(FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
 
 
 def save_specs(specs):
-    FILE.write_text(json.dumps(specs, indent=2, ensure_ascii=False))
+    FILE.write_text(json.dumps(specs, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def validate(raw, taken_names):

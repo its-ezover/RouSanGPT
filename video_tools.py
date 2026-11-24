@@ -311,7 +311,8 @@ def create_video(topic: str, num_scenes: int = 5) -> dict:
 
             print("  (joining the scenes...)", flush=True)
             list_file = tmp / "list.txt"
-            list_file.write_text("".join(f"file '{c}'\n" for c in clips))
+            # names only: the clips are next to the list (Windows paths would need escaping)
+            list_file.write_text("".join(f"file '{Path(c).name}'\n" for c in clips), encoding="utf-8")
             _ffmpeg(["-f", "concat", "-safe", "0", "-i", str(list_file),
                      "-c:v", "libx264", "-pix_fmt", "yuv420p",
                      "-c:a", "aac", "-ar", "44100", "-ac", "2", str(out_file)])
@@ -319,7 +320,7 @@ def create_video(topic: str, num_scenes: int = 5) -> dict:
         return {"error": f"The video could not be made: {e}"}
 
     # keep the script next to the video (useful for the report)
-    out_file.with_suffix(".json").write_text(board.model_dump_json(indent=2))
+    out_file.with_suffix(".json").write_text(board.model_dump_json(indent=2), encoding="utf-8")
     _open_file(out_file)
     return {
         "saved_to": str(out_file),

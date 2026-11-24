@@ -145,7 +145,7 @@ Every question needs a short "explanation". Do not repeat questions."""
     # save the full quiz (with answers) to a file: handy test cases for the report
     Path("quizzes").mkdir(exist_ok=True)
     saved = Path("quizzes") / f"quiz_{int(time.time())}.json"
-    saved.write_text(json.dumps({"topic": topic, "questions": questions}, indent=2))
+    saved.write_text(json.dumps({"topic": topic, "questions": questions}, indent=2), encoding="utf-8")
 
     return {
         "saved_to": str(saved),

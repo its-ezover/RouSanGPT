@@ -24,7 +24,7 @@ _lock = threading.Lock()
 def load():
     data = dict(DEFAULTS)
     try:
-        data.update(json.loads(SETTINGS_FILE.read_text()))
+        data.update(json.loads(SETTINGS_FILE.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         pass
     return data
@@ -36,7 +36,7 @@ def save(changes):
         data = load()
         data.update(changes)
         tmp = SETTINGS_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         try:
             os.chmod(tmp, 0o600)
         except OSError:
