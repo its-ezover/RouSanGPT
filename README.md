@@ -57,12 +57,13 @@ database (takes a few minutes):
 ```
 python ingest.py
 ```
-Start the assistant (at 127.0.0.1:8000):
+Start the assistant (web interface at 127.0.0.1:8000):
 ```
 python server.py
 ```
 
-## How to use it
+## How to use it (CLI)
+run chat.py
 At the `You:` prompt:
 - Type a question, for example `What is the difference between TCP and UDP?`
 - `/voice` to ask with the microphone, `/paste` for a multi-line question
