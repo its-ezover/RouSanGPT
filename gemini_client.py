@@ -12,7 +12,14 @@ from google.genai import types
 
 import settings
 
-TEST_MODEL = "gemini-3.1-flash-lite"   # a light model, used only to test a key
+# Online models for chatting, in order. When one is busy or fails, the next one is
+# tried. All of them were checked with a free key (text and tools) in November 2026.
+MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash",
+          "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+
+# For testing a key: light models first. Any one answering proves the key works.
+TEST_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.6-flash",
+               "gemini-3.5-flash"]
 
 
 class NoApiKey(RuntimeError):
@@ -92,21 +99,33 @@ def is_bad_key(e):
         or "permission_denied" in text or "unauthenticated" in text
 
 
-def with_retries(call, what="Gemini request", on_retry=None):
-    """Run call(). If Google is busy, wait 2, 4, then 8 seconds and try again (up to 3
-    more times). Other errors, and the last busy error, are raised as they are.
-    on_retry(attempt, wait) is called before each wait, for example to tell the user."""
-    for attempt, wait in enumerate(BUSY_WAITS + (None,), start=1):
-        try:
-            return call()
-        except Exception as e:
-            if wait is None or not is_busy(e):
-                raise
-            print(f"  ({what}: Google is busy, retry {attempt} of {len(BUSY_WAITS)} "
-                  f"in {wait}s. Details: {e!r})", flush=True)
-            if on_retry:
-                on_retry(attempt, wait)
-            time.sleep(wait)
+def across_models(models, call, start=0, what="Gemini request", on_retry=None):
+    """Run call(model) with each model in turn, starting at models[start], until one
+    works. Returns (result, index of the model that worked).
+
+    When a model is busy we go straight to the next one. Only when EVERY model failed
+    and at least one was busy do we wait (2, then 4, then 8 seconds) and go around
+    again. A wrong key stops at once (no other model will accept it either).
+    on_retry(round, wait) is called before each wait, for example to tell the user."""
+    for round_no, wait in enumerate(BUSY_WAITS + (None,), start=1):
+        any_busy, last = False, None
+        for i in range(len(models)):
+            index = (start + i) % len(models)
+            try:
+                return call(models[index]), index
+            except Exception as e:
+                print(f"  ({what}: {models[index]} failed. Details: {e!r})", flush=True)
+                if is_bad_key(e):
+                    raise
+                any_busy = any_busy or is_busy(e)
+                last = e
+        if wait is None or not any_busy:
+            raise last
+        print(f"  ({what}: every model is busy, retry {round_no} of {len(BUSY_WAITS)} "
+              f"in {wait}s)", flush=True)
+        if on_retry:
+            on_retry(round_no, wait)
+        time.sleep(wait)
 
 
 KEY_OK = "ok"            # the key works
@@ -124,10 +143,10 @@ def test_key(key):
         return KEY_BAD, "That does not look like a Gemini API key."
     client = _make(key, 15000)
     try:
-        with_retries(lambda: client.models.generate_content(
-            model=TEST_MODEL, contents="Reply with the single word OK.",
+        _, index = across_models(TEST_MODELS, lambda model: client.models.generate_content(
+            model=model, contents="Reply with the single word OK.",
             config=types.GenerateContentConfig(max_output_tokens=5)), what="key test")
-        return KEY_OK, "The key works."
+        return KEY_OK, f"The key works ({TEST_MODELS[index]})."
     except Exception as e:
         print(f"  (key test failed: {e!r})", flush=True)
         if is_bad_key(e):

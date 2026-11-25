@@ -30,8 +30,9 @@ from video_tools import VIDEO_TOOLS
 
 client = gemini_client.LazyClient(timeout_ms=45000)   # uses the key from Settings or .env
 
-# Online models, in order. If one fails, we switch and stay on the new one.
-MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
+# Online models, in order (see gemini_client.py). If one fails, we switch and stay
+# on the new one.
+MODELS = gemini_client.MODELS
 
 
 def local_model():
@@ -380,25 +381,29 @@ class Session:
             self.on_status(message)
 
     def send(self, prompt):
-        """If Google is busy, wait and retry the same model (2, 4, 8 s). If the model
-        still fails, switch to the next one and STAY on it."""
-        def busy(attempt, wait):
-            self._status(f"Gemini is busy, retrying ({attempt} of "
+        """Send with the current model. If it is busy or fails, switch to the next one
+        and STAY on it. If every model is busy, wait 2, 4, 8 s and go around again."""
+        def call(model):
+            if model != MODELS[self.model_index]:          # switch, keeping the chat so far
+                self._status(f"Gemini is busy, trying another model ({model})...")
+                self.chat = make_chat(model, self.chat.get_history())
+                self.model_index = MODELS.index(model)
+            return self.chat.send_message(prompt)
+
+        def busy(round_no, wait):
+            self._status(f"Gemini is busy, retrying ({round_no} of "
                          f"{len(gemini_client.BUSY_WAITS)})...")
-        for _ in range(len(MODELS)):
-            try:
-                reply = gemini_client.with_retries(lambda: self.chat.send_message(prompt),
-                                                   MODELS[self.model_index], busy)
-                self._status("")
-                return reply
-            except Exception as e:
-                old = MODELS[self.model_index]
-                self.model_index = (self.model_index + 1) % len(MODELS)
-                print(f"  ({old} failed, switching to {MODELS[self.model_index]}. "
-                      f"Details: {e!r})", flush=True)
-                self._status(f"Trying another model ({MODELS[self.model_index]})...")
-                self.chat = make_chat(MODELS[self.model_index], self.chat.get_history())
-        raise RuntimeError("Gemini is busy or not answering right now. Please try again in a minute.")
+        try:
+            reply, _ = gemini_client.across_models(MODELS, call, start=self.model_index,
+                                                   what="chat", on_retry=busy)
+        except Exception as e:
+            if gemini_client.is_bad_key(e):
+                raise RuntimeError("Google says the API key is not valid. "
+                                   "Open Settings and check your key.") from e
+            raise RuntimeError("Gemini is busy or not answering right now. "
+                               "Please try again in a minute.") from e
+        self._status("")
+        return reply
 
     def _ask_gemini(self, prompt):
         if (self.chat is None or self.tools_version != TOOLS_VERSION or self.gemini_stale
