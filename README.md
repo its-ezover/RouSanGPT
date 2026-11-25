@@ -75,7 +75,8 @@ mode keeps it in the project folder.
   Google account and press "Create API key"). The app asks for it on the first run.
   Without a key you can still use the local model.
 - An **internet connection** for Gemini, voice input and read-aloud. The first
-  start also downloads the search model (about 80 MB) once.
+  start also downloads the search model (about 80 MB) once (the Windows setup
+  already contains it).
 - Your **course files** (PDF, PPTX, PPT or TXT). They are not part of this
   repository; you add them in the app.
 
@@ -166,34 +167,25 @@ cd RouSanGPT && git pull && ./install.sh     # update; your data is kept
 ## Running on Windows
 
 ### 1. Install
-1. Download the project: on GitHub press **Code > Download ZIP** and extract it
-   (or `git clone https://github.com/its-ezover/RouSanGPT.git`).
-2. Open the folder and **double-click `install.cmd`**.
+1. Download **[RouSanGPT-Setup.exe](https://github.com/its-ezover/RouSanGPT/releases/latest/download/RouSanGPT-Setup.exe)**
+   (from the [Releases page](https://github.com/its-ezover/RouSanGPT/releases)).
+2. Open it and press **Next** until it finishes.
 
-The installer needs **no administrator rights** for the app itself. It:
-1. finds Python 3.10 to 3.14 (3.12 is preferred because every package has
-   ready-made downloads for it). If none is installed it offers to install 3.12 with
-   `winget`;
-2. checks the Microsoft Visual C++ runtime (the app cannot start without it),
-   FFmpeg (videos, animations, voice input) and Graphviz (diagrams) and offers to
-   install the missing ones with `winget`. The Visual C++ and Graphviz installers
-   may ask for permission. LibreOffice (old `.ppt` files) and Ollama (local model) are
-   optional;
-3. copies the program to `%LOCALAPPDATA%\RouSanGPT\app`, installs the Python
-   packages with [uv](https://docs.astral.sh/uv/) (a minute or two the first time;
-   pip if uv fails) and checks that they load;
-4. adds **RouSanGPT** to the Start menu with its icon, and to **Settings > Apps**
-   (for uninstalling).
+If Windows shows "Windows protected your PC", press **More info > Run anyway** (the
+setup is not signed with a paid certificate).
 
-Options (run from a terminal in the project folder):
-```bat
-install.cmd -ImportData C:\path\to\old\RouSanGPT
-install.cmd -DesktopShortcut
-install.cmd -Yes
-```
-`-ImportData` keeps the chats, course database and media of an existing RouSanGPT
-folder (and offers to use the key from its `.env`), `-DesktopShortcut` also puts an
-icon on the desktop, and `-Yes` installs missing programs without asking.
+The setup needs **no administrator rights** and **nothing else installed**: it
+contains its own Python with every package, FFmpeg (videos, animations, voice
+input), Graphviz (diagrams), the Microsoft Visual C++ runtime the packages need, and
+the course-search model. It installs the program to
+`%LOCALAPPDATA%\Programs\RouSanGPT`, adds **RouSanGPT** to the Start menu (and to
+the desktop if you tick the box), and lists it in **Settings > Apps**.
+
+Optional extras you can install yourself: [LibreOffice](https://www.libreoffice.org/)
+for old `.ppt` files, and [Ollama](https://ollama.com/download) for the offline
+local model.
+
+Silent install (for labs): `RouSanGPT-Setup.exe /VERYSILENT /TASKS=desktopicon`.
 
 ### 2. Start it
 Open **RouSanGPT** from the Start menu (type "RouSanGPT"). It opens in its own
@@ -205,46 +197,35 @@ key; then add your course files in **Materials**.
 Close the window and RouSanGPT stops by itself, or use **Settings > Quit RouSanGPT**.
 
 ### Update and uninstall
-- **Update:** download the new version and double-click `install.cmd` again. Your
-  data is kept.
-- **Uninstall:** **Settings > Apps > RouSanGPT > Uninstall**, or double-click
-  `uninstall.cmd`. Your data is kept. `uninstall.cmd -Purge` also deletes it
-  (it asks first).
+- **Update:** download the new `RouSanGPT-Setup.exe` and open it. If RouSanGPT is
+  running, the setup closes it first. Your data is kept.
+- **Uninstall:** **Settings > Apps > RouSanGPT > Uninstall**. It then asks whether
+  to delete your data too (the answer is "No" unless you choose "Yes").
+- **Coming from the old `install.cmd` version:** just run the setup. It removes
+  the old program and keeps your chats, course files and API key.
 
 ### Where things are
 | What | Where |
 |---|---|
 | Your data: chats, course database, materials, videos, settings, API key | `%LOCALAPPDATA%\RouSanGPT\data` |
 | Log file | `%LOCALAPPDATA%\RouSanGPT\data\logs\rousangpt.log` |
-| Program and Python packages | `%LOCALAPPDATA%\RouSanGPT\app` and `%LOCALAPPDATA%\RouSanGPT\venv` |
-| Start menu shortcut | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\RouSanGPT.lnk` |
+| Program (with its Python, FFmpeg and Graphviz) | `%LOCALAPPDATA%\Programs\RouSanGPT` |
 
 ### Troubleshooting (Windows)
 - **Nothing happens when opening the app:** run
-  `%LOCALAPPDATA%\RouSanGPT\rousangpt-console.cmd` to see the messages, or read the
-  log file.
-- **FFmpeg or Graphviz were installed but are not found:** sign out and back in (so
-  Windows refreshes its PATH) or run `install.cmd` again.
+  `%LOCALAPPDATA%\Programs\RouSanGPT\rousangpt-console.cmd` to see the messages, or
+  read the log file.
 - **Microphone:** allow it when Edge asks, and turn on Settings > Privacy & security
   > Microphone > "Let desktop apps access your microphone".
-- **The script is blocked:** use `install.cmd` (not `install.ps1` directly); it
-  starts PowerShell with permission to run the script.
-- **"install.ps1 was not found":** the ZIP was not extracted. Right-click it,
-  choose **Extract All**, and run `install.cmd` from the extracted folder.
-- **winget: "Failed when searching source: msstore ... The server certificate did
-  not match":** the Microsoft Store catalog is blocked on this network (a proxy or an
-  antivirus that inspects HTTPS). The installer only uses the `winget` catalog, so
-  this no longer stops it. To silence it everywhere, run in an administrator
-  terminal: `winget source disable msstore`. If every download fails with
-  certificate errors, check that the computer's date and time are correct.
-- **"The Python packages do not load" / "DLL load failed":** the Microsoft Visual
-  C++ runtime is missing or too old. The installer offers to install or update it;
-  or download it from https://aka.ms/vs/17/release/vc_redist.x64.exe, restart the
-  computer if it asks to, and run `install.cmd` again.
-- **Only a very new Python is installed:** the installer offers to add Python 3.12
-  next to it (both can stay installed); 3.10 to 3.14 are all fine.
 - **Local model:** install Ollama from https://ollama.com/download. The Ollama app
   keeps its models in `%USERPROFILE%\.ollama\models`.
+
+### Building the setup
+GitHub Actions builds `RouSanGPT-Setup.exe` for every change (download it from the
+run's **Artifacts**), and publishes it on the Releases page when a version tag is
+pushed (`git tag v1.2.0 && git push origin v1.2.0`). To build it on a Windows
+computer: install [Inno Setup 6](https://jrsoftware.org/isdl.php) and Python 3.13,
+then run `pwsh windows\build.ps1`; the result is `dist\RouSanGPT-Setup.exe`.
 
 ---
 
@@ -526,11 +507,14 @@ with the install command instead of a crash.
   `~/.local/share/RouSanGPT/app`, creates a Python virtual environment and installs
   `requirements.txt`, and writes the `rousangpt` command, the menu entry
   (`rousangpt.desktop`) and the icons. If the app is running, it is closed first.
-- **Windows (`install.cmd`, which runs `install.ps1`):** the same steps with
-  Windows tools: the `py` launcher to find Python, `winget` to install missing
-  programs, a Start menu shortcut that runs `pythonw.exe` (no console window), and
-  an entry in Settings > Apps.
-- Both copy only the program files. Your `.env`, chats, course files and settings
+- **Windows (`RouSanGPT-Setup.exe`, made with [Inno Setup](https://jrsoftware.org/isinfo.php)):**
+  `windows/build.ps1` puts the official embeddable Python, the packages from
+  `requirements.txt`, the Visual C++ runtime, FFmpeg, Graphviz (in `app/bin`) and
+  the search model (in `app/models`, used by `knowledge.py`) in one folder, checks
+  that it all works (`windows/check_bundle.py`), and `windows/RouSanGPT.iss` turns
+  it into the setup. The Start menu shortcut runs `pythonw.exe` (no console window).
+  Before an update or uninstall the setup asks a running app to quit.
+- Both install only the program files. Your `.env`, chats, course files and settings
   are never copied into the program or into this repository.
 - **Package versions:** `requirements.txt` lets each package update, but not to its
   next major version (those can change how things work and are tested first).
@@ -562,7 +546,7 @@ with the install command instead of a crash.
 | `video_tools.py` | narrated video generator |
 | `quiz.py` | quiz generator and answer checker |
 | `install.sh`, `uninstall.sh` | Linux installer |
-| `install.cmd`, `install.ps1`, `uninstall.cmd`, `uninstall.ps1` | Windows installer |
+| `windows/` | Windows setup: `build.ps1`, `RouSanGPT.iss`, `check_bundle.py`, `rousangpt-console.cmd` |
 | `tests/` | automatic tests (see [Tests](#tests)) |
 | `icons/`, `web/logo.png`, `logo.png` | app icons and logo |
 
@@ -579,9 +563,10 @@ breaks the app shows up early):
   Remove, closing the panel while a file is added, a narrow window, a chat with a
   deleted video, scrolling, how fast an answer appears, and that other web sites
   are refused. The tutor's answers are faked, so no question goes to Gemini.
-- **Windows install** (`.github/workflows/windows-install.yml`): runs the real
-  installer on a fresh Windows machine, adds a course file, updates the app while
-  it runs, quits and uninstalls it.
+- **Windows setup** (`.github/workflows/windows-setup.yml`): builds
+  `RouSanGPT-Setup.exe`, installs it on a fresh Windows machine, adds a course file
+  (with the bundled search model), updates the app while it runs, quits and
+  uninstalls it.
 
 To run the first two yourself (they use a temporary data folder, never your own):
 ```bash
@@ -613,5 +598,5 @@ python tests/ui_test.py --shots screenshots     # screenshots are optional
   and its answers are simpler.
 - Homework detection relies on the homework files and on what the student says, so
   it reduces cheating but cannot prevent it completely.
-- The Windows installer has been tested less than the Linux version. If something
-  goes wrong, please report the output of `rousangpt-console.cmd`.
+- The Windows app has been tested less than the Linux version. If something goes
+  wrong, please report the output of `rousangpt-console.cmd`.

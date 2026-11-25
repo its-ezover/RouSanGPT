@@ -35,3 +35,7 @@ logs/
 browser-profile/
 firefox-profile/
 formula_tools.json
+
+# Windows setup build (windows/build.ps1)
+build/
+dist/

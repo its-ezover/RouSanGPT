@@ -1,0 +1,191 @@
+# Builds the Windows setup program (RouSanGPT-Setup.exe), then tests it on a fresh
+# Windows machine: installs it, uses the app, updates it while it runs, uninstalls it.
+# Every run keeps the setup as a download ("Artifacts" on the run's page). Pushing a
+# tag such as v1.2.0 also publishes it on the GitHub Releases page.
+name: Windows setup
+
+on:
+  push:                        # every branch, and tags like v1.2.0
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"         # every Monday: catches a new package release that breaks the app
+  workflow_dispatch:
+
+permissions:
+  contents: write               # to publish the setup on a release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"   # the same version as the bundled Python (windows/build.ps1)
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Build the setup
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF -like "refs/tags/v*") { $env:GITHUB_REF_NAME.Substring(1) } else { Get-Date -Format "yyyy.M.d" }
+          ./windows/build.ps1 -Version $version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RouSanGPT-Setup
+          path: dist/RouSanGPT-Setup.exe
+          if-no-files-found: error
+
+      - name: Install (silent, with a desktop shortcut)
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\RouSanGPT-Setup.exe -PassThru -Wait -ArgumentList @(
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/TASKS=desktopicon", "/LOG=$env:RUNNER_TEMP\setup.log")
+          Get-Content "$env:RUNNER_TEMP\setup.log" -Tail 25
+          if ($p.ExitCode -ne 0) { "FAIL  setup exit code $($p.ExitCode)"; exit 1 }
+
+      - name: Check what was installed
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\RouSanGPT"
+          $data = Join-Path $env:LOCALAPPDATA "RouSanGPT\data"
+          $fail = 0
+          function Check($what, $ok) { if ($ok) { "PASS  $what" } else { "FAIL  $what"; $script:fail++ } }
+          Check "program" (Test-Path "$app\app\launcher.py")
+          Check "web page" (Test-Path "$app\app\web\index.html")
+          Check "icon" (Test-Path "$app\app\icons\rousangpt.ico")
+          Check "Python (pythonw.exe)" (Test-Path "$app\python\pythonw.exe")
+          Check "FFmpeg" (Test-Path "$app\app\bin\ffmpeg.exe")
+          Check "Graphviz" (Test-Path "$app\app\bin\dot.exe")
+          Check "search model" (Test-Path "$app\app\models\all-MiniLM-L6-v2")
+          Check "console helper" (Test-Path "$app\rousangpt-console.cmd")
+          Check "uninstaller" (Test-Path "$app\unins000.exe")
+          Check "data folder" (Test-Path $data)
+          $shell = New-Object -ComObject WScript.Shell
+          foreach ($lnk in @((Join-Path ([Environment]::GetFolderPath("Programs")) "RouSanGPT.lnk"),
+                             (Join-Path ([Environment]::GetFolderPath("Desktop")) "RouSanGPT.lnk"))) {
+            Check "shortcut $lnk" (Test-Path $lnk)
+            if (Test-Path $lnk) {
+              $s = $shell.CreateShortcut($lnk)
+              Check "  runs pythonw.exe ($($s.TargetPath))" ($s.TargetPath -eq "$app\python\pythonw.exe")
+              Check "  starts launcher.py with --data-dir ($($s.Arguments))" ($s.Arguments -like "*launcher.py*--data-dir*")
+            }
+          }
+          $key = Get-ChildItem "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall" |
+            Where-Object { $_.GetValue("DisplayName") -eq "RouSanGPT" }
+          Check "listed in Settings > Apps" ($key)
+          if ($fail) { exit 1 }
+
+      - name: Start the app, use it, update it while it runs, quit
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\RouSanGPT"
+          $data = Join-Path $env:LOCALAPPDATA "RouSanGPT\data"
+          $log = Join-Path $env:RUNNER_TEMP "app.log"
+          function Start-App {
+            Start-Process -FilePath "$app\python\python.exe" -PassThru -RedirectStandardOutput $log -RedirectStandardError "$log.err" `
+              -ArgumentList @("-X", "utf8", "`"$app\app\launcher.py`"", "--data-dir", "`"$data`"", "--no-window", "--console")
+          }
+          function Wait-Status($seconds) {
+            for ($i = 0; $i -lt $seconds; $i++) {
+              try {
+                $port = (Get-Content "$data\server.json" -Raw | ConvertFrom-Json).port
+                $s = Invoke-RestMethod "http://127.0.0.1:$port/api/status" -TimeoutSec 3
+                if ($s.app -eq "RouSanGPT") { return $port }
+              } catch { }
+              Start-Sleep 1
+            }
+            return $null
+          }
+          function Show-Log { Get-Content $log, "$log.err" -ErrorAction SilentlyContinue }
+
+          $p = Start-App
+          $port = Wait-Status 180
+          if (-not $port) { "FAIL  the app did not answer"; Show-Log; exit 1 }
+          "PASS  the app answers on port $port"
+          $chat = Invoke-RestMethod -Method Post "http://127.0.0.1:$port/api/chats"
+          if (-not $chat.id) { "FAIL  could not create a chat"; Show-Log; exit 1 }
+          "PASS  created chat $($chat.id)"
+          $page = Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasicParsing
+          if ($page.StatusCode -ne 200) { "FAIL  the web page"; exit 1 }
+          "PASS  the web page loads"
+
+          # Add a course file the way the page does (upload, then wait for the result).
+          # This uses the bundled search model.
+          $txt = Join-Path $env:RUNNER_TEMP "ci-notes.txt"
+          Set-Content $txt "TCP opens a connection with a three-way handshake: SYN, SYN-ACK, ACK." -Encoding utf8
+          $job = Invoke-RestMethod -Method Post "http://127.0.0.1:$port/api/materials" -Form @{ file = Get-Item $txt }
+          $r = $null
+          for ($i = 0; $i -lt 40; $i++) {
+            $r = Invoke-RestMethod "http://127.0.0.1:$port/api/result/$($job.job_id)?wait=15" -TimeoutSec 30
+            if ($r.status -ne "working") { break }
+          }
+          if ($r.status -ne "done") { "FAIL  adding a course file: $($r | ConvertTo-Json -Compress)"; Show-Log; exit 1 }
+          "PASS  added a course file ($($r.pieces) pieces)"
+          if (Test-Path "$env:USERPROFILE\.cache\chroma\onnx_models") { "FAIL  the search model was downloaded instead of the bundled one"; exit 1 }
+          "PASS  the bundled search model was used"
+
+          # Update while the app runs: the setup must close it first
+          $u = Start-Process dist\RouSanGPT-Setup.exe -PassThru -Wait -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=$env:RUNNER_TEMP\update.log")
+          if ($u.ExitCode -ne 0) { "FAIL  updating while the app runs (exit $($u.ExitCode))"; Get-Content "$env:RUNNER_TEMP\update.log" -Tail 40; exit 1 }
+          if (-not $p.WaitForExit(30000)) { "FAIL  the setup did not close the running app"; Show-Log; exit 1 }
+          "PASS  the setup closed the running app and updated it"
+          if (-not (Test-Path "$data\chats.db")) { "FAIL  the update lost the chats"; exit 1 }
+          "PASS  data kept after the update"
+
+          # Start again and quit
+          $p = Start-App
+          $port = Wait-Status 120
+          if (-not $port) { "FAIL  the app did not start after the update"; Show-Log; exit 1 }
+          "PASS  the app starts after the update"
+          $m = Invoke-RestMethod "http://127.0.0.1:$port/api/materials"
+          if (-not ($m | Where-Object name -eq "ci-notes.txt")) { "FAIL  the course file is gone after the update"; exit 1 }
+          "PASS  the course file is still there"
+          Invoke-RestMethod -Method Post "http://127.0.0.1:$port/api/quit" | Out-Null
+          if (-not $p.WaitForExit(30000)) { "FAIL  Quit did not stop the app"; Show-Log; exit 1 }
+          if (Test-Path "$data\server.json") { "FAIL  server.json left behind"; exit 1 }
+          "PASS  Quit stops the app"
+          Show-Log
+
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\RouSanGPT"
+          Start-Process "$app\unins000.exe" -Wait -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART")
+          # the uninstaller runs a copy of itself: wait until it has finished
+          for ($i = 0; $i -lt 60 -and (Test-Path $app); $i++) { Start-Sleep 1 }
+
+      - name: Check the uninstall
+        shell: pwsh
+        run: |
+          $fail = 0
+          function Check($what, $ok) { if ($ok) { "PASS  $what" } else { "FAIL  $what"; $script:fail++ } }
+          Check "program removed" (-not (Test-Path (Join-Path $env:LOCALAPPDATA "Programs\RouSanGPT")))
+          Check "Start menu shortcut removed" (-not (Test-Path (Join-Path ([Environment]::GetFolderPath("Programs")) "RouSanGPT.lnk")))
+          Check "desktop shortcut removed" (-not (Test-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "RouSanGPT.lnk")))
+          $key = Get-ChildItem "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall" |
+            Where-Object { $_.GetValue("DisplayName") -eq "RouSanGPT" }
+          Check "removed from Settings > Apps" (-not $key)
+          Check "data kept" (Test-Path (Join-Path $env:LOCALAPPDATA "RouSanGPT\data\chats.db"))
+          if ($fail) { exit 1 }
+
+      - name: Publish on the Releases page
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --title "RouSanGPT $env:GITHUB_REF_NAME" --notes "Download RouSanGPT-Setup.exe and open it to install RouSanGPT on Windows." }
+          gh release upload $env:GITHUB_REF_NAME dist/RouSanGPT-Setup.exe --clobber
+
+      - name: Logs (when something failed)
+        if: failure()
+        shell: pwsh
+        run: Get-Content "$env:LOCALAPPDATA\RouSanGPT\data\logs\*.log", "$env:RUNNER_TEMP\*.log" -ErrorAction SilentlyContinue

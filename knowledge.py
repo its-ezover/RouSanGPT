@@ -8,7 +8,14 @@ import threading
 import chromadb
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
-from app_paths import DATA_DIR
+from app_paths import CODE_DIR, DATA_DIR
+
+# The Windows setup ships the search model in app\models, so the first start does not
+# have to download it (elsewhere Chroma downloads it once to ~/.cache/chroma)
+_BUNDLED_MODEL = CODE_DIR / "models" / "all-MiniLM-L6-v2"
+if _BUNDLED_MODEL.is_dir():
+    from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
+    ONNXMiniLM_L6_V2.DOWNLOAD_PATH = _BUNDLED_MODEL
 
 ANSWER_KEY_WORDS = ["solution", "answer"]            # hidden from the tutor
 HOMEWORK_WORDS = ["hw", "homework", "question"]      # labelled as homework
