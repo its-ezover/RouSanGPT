@@ -1,3 +1,4 @@
+import contextvars
 import json
 import re
 import time
@@ -28,8 +29,25 @@ class Quiz(BaseModel):
     questions: list[QuizQuestion]
 
 
-# The quiz currently being played. The answers live here, hidden from the AI.
-_ACTIVE = {"questions": [], "answered": {}}
+# The quiz being played in each chat. The answers live here, hidden from the AI.
+# Every chat (agent.Session) has its own, so a quiz in one chat never replaces the
+# quiz of another chat.
+
+def new_state():
+    return {"questions": [], "answered": {}}
+
+
+_OUTSIDE_A_CHAT = new_state()              # for example when this file is run on its own
+_current = contextvars.ContextVar("quiz_state", default=None)
+
+
+def use_state(state):
+    """Make the quiz tools use this chat's quiz (called before each answer)."""
+    _current.set(state)
+
+
+def _state():
+    return _current.get() or _OUTSIDE_A_CHAT
 
 
 def _course_excerpts(topic):
@@ -109,8 +127,9 @@ Every question needs a short "explanation". Do not repeat questions."""
     ]
     if not questions:
         return {"error": "Could not create a good quiz. Please try again."}
-    _ACTIVE["questions"] = questions
-    _ACTIVE["answered"] = {}
+    state = _state()
+    state["questions"] = questions
+    state["answered"] = {}
 
     # save the full quiz (with answers) to a file: handy test cases for the report
     Path("quizzes").mkdir(exist_ok=True)
@@ -132,7 +151,8 @@ def check_quiz_answer(question_number: int, student_answer: str) -> dict:
     question_number: the question's number, starting at 1. student_answer: what the
     student wrote (for multiple choice, a letter A-D or the option text). Returns
     whether it is correct, the correct answer, an explanation and the running score."""
-    questions = _ACTIVE["questions"]
+    state = _state()
+    questions = state["questions"]
     if not questions:
         return {"error": "There is no active quiz. Create one first with create_quiz."}
     if not 1 <= question_number <= len(questions):
@@ -146,13 +166,13 @@ def check_quiz_answer(question_number: int, student_answer: str) -> dict:
             given = q["options"][index]
 
     correct = _normalize(given) == _normalize(q["correct_answer"])
-    _ACTIVE["answered"][question_number] = correct
-    score = sum(_ACTIVE["answered"].values())
+    state["answered"][question_number] = correct
+    score = sum(state["answered"].values())
     return {
         "correct": correct,
         "correct_answer": q["correct_answer"],
         "explanation": q["explanation"],
-        "score_so_far": f"{score} correct out of {len(_ACTIVE['answered'])} answered "
+        "score_so_far": f"{score} correct out of {len(state['answered'])} answered "
                         f"(quiz has {len(questions)} questions)",
         "note": "For fill-in-the-blank or packet questions, if the student's wording "
                 "differs but clearly means the same thing, treat it as correct.",

@@ -13,6 +13,7 @@ from google.genai import types
 
 import gemini_client
 import knowledge
+import quiz
 import settings
 
 import animation_tools
@@ -360,6 +361,7 @@ class Session:
         self.chat = None
         self.tools_version = -1
         self.gemini_stale = False
+        self.quiz = quiz.new_state()          # this chat's quiz (see quiz.py)
         self.lock = threading.Lock()
 
     # ---- Gemini (online) ----
@@ -440,6 +442,7 @@ class Session:
 
     def ask(self, question, language="auto", backend="auto"):
         started = time.time() - 1
+        quiz.use_state(self.quiz)
         found = find_material(question)
         context = "\n\n".join(
             f"[{kind}: {m['source']} - {m['location']}]\n{d}" for kind, d, m in found

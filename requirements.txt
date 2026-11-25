@@ -1,17 +1,22 @@
-google-genai>=1.0
-python-dotenv
+# Each package may update, but not to its next major version: those can change how
+# things work and must be tested first (the GitHub checks also run every week, so a
+# new release that breaks the app shows up there before students run into it).
+# Tested with: google-genai 3.6, chromadb 1.5, fastapi 0.165, uvicorn 0.54,
+# numpy 2.5, pillow 13.0, pydantic 2.14, matplotlib 3.11, pypdf 7.1 (Nov 2026).
+google-genai>=1.0,<4
+python-dotenv<2
 chromadb>=1.5,<2
-pypdf
-python-pptx
-matplotlib
-pillow
-pydantic>=2
-numpy
-sounddevice
-edge-tts>=7
-ollama
-fastapi
-uvicorn
-python-multipart
-psutil
-truststore
+pypdf<8
+python-pptx<2
+matplotlib<4
+pillow<14
+pydantic>=2,<3
+numpy<3
+sounddevice<1
+edge-tts>=7,<8
+ollama<1
+fastapi<1
+uvicorn<1
+python-multipart<1
+psutil<8
+truststore<1

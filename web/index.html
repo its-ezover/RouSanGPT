@@ -964,7 +964,7 @@ async function renderMaterialList() {
     row.appendChild(el("span", "muted", (GROUP_NAMES[f.group] || f.group) + " - " + piecesText(f.pieces)));
     const del = el("button", "small danger", "Remove");
     del.onclick = async function () {
-      if (!confirm("Remove " + f.name + " from the tutor's knowledge?")) return;
+      if (!confirm("Remove " + f.name + " from the tutor's knowledge?\n\nYour own copy of the file (where you added it from) is not touched.")) return;
       del.disabled = true;
       try {
         await api("DELETE", "/api/materials/" + encodeURIComponent(f.name));

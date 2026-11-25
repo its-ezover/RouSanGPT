@@ -23,8 +23,9 @@ is built only with free tools.
 6. [Using the app](#using-the-app)
 7. [How it works](#how-it-works)
 8. [Project structure](#project-structure)
-9. [Privacy and security](#privacy-and-security)
-10. [Known limitations](#known-limitations)
+9. [Tests](#tests)
+10. [Privacy and security](#privacy-and-security)
+11. [Known limitations](#known-limitations)
 
 ---
 
@@ -439,8 +440,9 @@ tutor cannot leak them.
 Gemini writes the questions from the course excerpts in a fixed JSON format
 (multiple choice, fill in the blank, packet analysis with a Wireshark-style
 capture). The correct answers stay in the program and are hidden from the AI, so
-`check_quiz_answer` grades your answers fairly and the AI explains them. Quizzes
-are saved in `quizzes/`.
+`check_quiz_answer` grades your answers fairly and the AI explains them. Every
+chat has its own quiz, so starting a quiz in one chat never replaces the quiz you
+are playing in another. Quizzes are saved in `quizzes/`.
 
 ### Voice
 - **Speaking a question:** the page records with the browser's microphone, sends
@@ -530,6 +532,8 @@ with the install command instead of a crash.
   an entry in Settings > Apps.
 - Both copy only the program files. Your `.env`, chats, course files and settings
   are never copied into the program or into this repository.
+- **Package versions:** `requirements.txt` lets each package update, but not to its
+  next major version (those can change how things work and are tested first).
 
 ---
 
@@ -559,13 +563,40 @@ with the install command instead of a crash.
 | `quiz.py` | quiz generator and answer checker |
 | `install.sh`, `uninstall.sh` | Linux installer |
 | `install.cmd`, `install.ps1`, `uninstall.cmd`, `uninstall.ps1` | Windows installer |
+| `tests/` | automatic tests (see [Tests](#tests)) |
 | `icons/`, `web/logo.png`, `logo.png` | app icons and logo |
 
 ---
 
+## Tests
+GitHub runs these on every push and every Monday (so a new package release that
+breaks the app shows up early):
+- **`tests/test_backend.py`:** every chat has its own quiz, the counter of files
+  being added is safe with many threads, and the course search gives the same
+  pieces as asking the database directly.
+- **`tests/ui_test.py`:** the web page in a real browser (Chromium), in the light
+  and the dark theme: drag and drop, the drop overlay, skipped files, choose files,
+  Remove, closing the panel while a file is added, a narrow window, a chat with a
+  deleted video, scrolling, how fast an answer appears, and that other web sites
+  are refused. The tutor's answers are faked, so no question goes to Gemini.
+- **Windows install** (`.github/workflows/windows-install.yml`): runs the real
+  installer on a fresh Windows machine, adds a course file, updates the app while
+  it runs, quits and uninstalls it.
+
+To run the first two yourself (they use a temporary data folder, never your own):
+```bash
+python tests/test_backend.py
+pip install playwright && playwright install chromium
+python tests/ui_test.py --shots screenshots     # screenshots are optional
+```
+
 ## Privacy and security
 - The server listens only on `127.0.0.1`, so nothing else on your network can
-  reach it.
+  reach it. It also refuses requests that come from other web sites open in your
+  browser, and requests that use another site's name (DNS rebinding), so a web
+  page cannot add files, quit the app or read your chats.
+- Removing a course file in **Materials** also deletes the app's own copy of it
+  (installed app). The file you added it from is never touched.
 - Your API key is stored only in `settings.json` in your data folder (or in your
   own `.env` in dev mode), readable only by your user. It is never part of the
   repository or of the installed program.

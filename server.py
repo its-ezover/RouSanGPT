@@ -9,7 +9,7 @@ import webbrowser
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -23,13 +23,30 @@ import knowledge
 import local_ai
 import settings
 import tts
-from app_paths import CODE_DIR, DATA_DIR
+from app_paths import CODE_DIR, DATA_DIR, INSTALLED
 
 agent.disable_popups()          # the web page shows pictures and videos itself
 history_store.init()
 
 BASE = CODE_DIR                 # the program files (web page, logo)
 app = FastAPI(title="RouSanGPT")
+
+LOCAL_NAMES = ("127.0.0.1", "localhost", "[::1]")
+
+
+@app.middleware("http")
+async def only_this_computer(request: Request, call_next):
+    """Answer only the app's own page. Without this, any web site open in the browser
+    could send requests to the app (upload files, quit it), and a site that points
+    its own name at 127.0.0.1 ("DNS rebinding") could even read the chats."""
+    host = request.headers.get("host", "")
+    if host.rsplit(":", 1)[0].lower() not in LOCAL_NAMES:
+        return JSONResponse({"detail": "Only this computer can use RouSanGPT."}, status_code=403)
+    origin = request.headers.get("origin")
+    if origin is not None and origin.lower() not in (f"http://{host}".lower(), f"https://{host}".lower()):
+        return JSONResponse({"detail": "Requests from other web sites are not allowed."}, status_code=403)
+    return await call_next(request)
+
 
 sessions = {}                   # chat id -> the tutor's memory of that chat
 sessions_lock = threading.Lock()
@@ -224,7 +241,24 @@ def result(job_id: str, wait: float = 0):
 
 MATERIALS = DATA_DIR / "materials"
 ingest_lock = threading.Lock()          # add one file at a time
-ingesting = {"count": 0}                # files being added right now (never quit during this)
+
+
+class Counter:
+    """A number that several threads change safely (a plain "+= 1" can lose updates)."""
+
+    def __init__(self):
+        self.value = 0
+        self._lock = threading.Lock()
+
+    def add(self, n):
+        with self._lock:
+            self.value += n
+
+    def __bool__(self):
+        return self.value > 0
+
+
+ingesting = Counter()                   # files being added right now (never quit during this)
 
 
 @app.get("/api/materials")
@@ -238,7 +272,7 @@ def run_ingest(job_id, path):
     try:
         _run_ingest(job_id, path, progress)
     finally:
-        ingesting["count"] -= 1
+        ingesting.add(-1)
 
 
 def _run_ingest(job_id, path, progress):
@@ -269,7 +303,7 @@ def upload_material(file: UploadFile = File(...)):
     with open(path, "wb") as out:               # copied in pieces, not all in memory
         shutil.copyfileobj(file.file, out, 1024 * 1024)
     job_id = new_job("reading")
-    ingesting["count"] += 1
+    ingesting.add(1)
     threading.Thread(target=run_ingest, args=(job_id, path), daemon=True).start()
     return {"job_id": job_id}
 
@@ -280,6 +314,11 @@ def delete_material(name: str):
     with ingest_lock:
         ingest_lib.remove_source(agent.collection, name)
         agent.refresh_sources()
+        # The installed app keeps its own copy of every added file: delete it too.
+        # (In dev mode the materials folder holds your original files, used by
+        # ingest.py, so they are kept.)
+        if INSTALLED:
+            (MATERIALS / name).unlink(missing_ok=True)
     return {"ok": True}
 
 
@@ -523,7 +562,7 @@ class Lifecycle:
         while not self.stopping:
             time.sleep(1)
             reason = self._reason_to_stop()
-            if reason and not ingesting["count"]:
+            if reason and not ingesting:
                 self.shutdown(reason)
 
     def shutdown(self, reason):
@@ -531,7 +570,7 @@ class Lifecycle:
             return
         self.stopping = True
         print(f"  (shutting down: {reason})", flush=True)
-        while ingesting["count"]:               # never stop while a file is being added
+        while ingesting:                        # never stop while a file is being added
             time.sleep(0.5)
         with ingest_lock:
             local_ai.stop_if_started_by_us()

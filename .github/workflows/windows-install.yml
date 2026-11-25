@@ -12,6 +12,8 @@ on:
       - "web/**"
       - ".github/workflows/windows-install.yml"
   pull_request:
+  schedule:
+    - cron: "0 6 * * 1"         # every Monday: catches a new package release that breaks the install
   workflow_dispatch:
 
 jobs:
