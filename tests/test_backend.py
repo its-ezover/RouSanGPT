@@ -95,5 +95,102 @@ check("the search gives the same pieces as asking Chroma directly",
       [doc for _, doc, _ in found] == old_way["documents"][0])
 check("groups without files are skipped", knowledge.search("x", [("SLIDES", [], 3)]) == [])
 
+# ---- the key test: "Google is busy" is not "the key is wrong" ----
+import gemini_client  # noqa: E402
+from google.genai import errors  # noqa: E402
+
+BUSY = errors.ServerError(503, {"error": {"code": 503, "status": "UNAVAILABLE",
+                                          "message": "This model is currently experiencing high demand."}})
+BAD = errors.ClientError(400, {"error": {"code": 400, "status": "INVALID_ARGUMENT",
+                                         "message": "API key not valid. Please pass a valid API key."}})
+DENIED = errors.ClientError(403, {"error": {"code": 403, "status": "PERMISSION_DENIED", "message": "no"}})
+QUOTA = errors.ClientError(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "slow down"}})
+
+
+class FakeModels:
+    def __init__(self, answers):
+        self.answers, self.calls = list(answers), 0
+
+    def generate_content(self, **kwargs):
+        self.calls += 1
+        answer = self.answers.pop(0) if self.answers else "OK"
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+def try_key(answers):
+    """Test a key while Google answers with `answers` (errors or "OK"), without waiting."""
+    fake = FakeModels(answers)
+    real_make, real_sleep = gemini_client._make, gemini_client.time.sleep
+    gemini_client._make = lambda key, timeout: type("C", (), {"models": fake})()
+    gemini_client.time.sleep = lambda s: None
+    try:
+        return gemini_client.test_key("AIza" + "x" * 35), fake.calls
+    finally:
+        gemini_client._make, gemini_client.time.sleep = real_make, real_sleep
+
+
+(outcome, _), calls = try_key(["OK"])
+check("a working key is OK", outcome == gemini_client.KEY_OK and calls == 1)
+(outcome, _), calls = try_key([BUSY, BUSY, "OK"])
+check("a busy Google is retried until it answers", outcome == gemini_client.KEY_OK and calls == 3)
+(outcome, message), calls = try_key([BUSY] * 10)
+check("still busy after 3 retries: 'busy' (the key gets saved)",
+      outcome == gemini_client.KEY_BUSY and calls == 4 and "saved" in message)
+check("the user never sees the raw error", "{" not in message and "503" not in message)
+(outcome, _), _ = try_key([QUOTA] * 10)
+check("429 too many requests counts as busy", outcome == gemini_client.KEY_BUSY)
+(outcome, message), calls = try_key([BAD])
+check("an invalid key is 'bad' at once, without retries",
+      outcome == gemini_client.KEY_BAD and calls == 1 and message.startswith("This API key isn't valid"))
+(outcome, _), _ = try_key([DENIED])
+check("403 permission denied is 'bad'", outcome == gemini_client.KEY_BAD)
+(outcome, _), _ = try_key([BUSY, BAD])
+check("busy, then invalid: 'bad'", outcome == gemini_client.KEY_BAD)
+
+# the /api/settings/key endpoint saves a key when Google was only busy
+import settings  # noqa: E402
+real_test = gemini_client.test_key
+for outcome, saved in [(gemini_client.KEY_BUSY, True), (gemini_client.KEY_BAD, False)]:
+    settings.save({"gemini_api_key": ""})
+    gemini_client.test_key = lambda key, o=outcome: (o, "message")
+    try:
+        server.set_key(server.KeyRequest(key="AIza" + "y" * 35))
+    except server.HTTPException:
+        pass
+    check(f"the key is {'saved' if saved else 'not saved'} when the test says '{outcome}'",
+          (settings.get("gemini_api_key") == "AIza" + "y" * 35) == saved)
+gemini_client.test_key = real_test
+settings.save({"gemini_api_key": ""})
+
+
+# ---- a chat waits and retries when Gemini is busy ----
+class FakeChat:
+    def __init__(self, answers):
+        self.answers = answers
+
+    def send_message(self, prompt):
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+agent = server.agent
+session = agent.Session()
+session.chat = FakeChat([BUSY, BUSY, "the answer"])
+shown = []
+session.on_status = shown.append
+real_sleep, gemini_client.time.sleep = gemini_client.time.sleep, lambda s: None
+try:
+    reply = session.send("hi")
+finally:
+    gemini_client.time.sleep = real_sleep
+check("a chat retries while Gemini is busy and then answers", reply == "the answer"
+      and session.model_index == 0)
+check("the page is told 'Gemini is busy, retrying', then the note is cleared",
+      shown[0].startswith("Gemini is busy, retrying") and shown[-1] == "")
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

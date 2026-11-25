@@ -629,11 +629,14 @@ function addWaiting() {
   d.appendChild(label);
   scrollDown();
   const t0 = Date.now();
+  let note = "";                       // for example "Gemini is busy, retrying..."
   const timer = setInterval(function () {
     const s = Math.round((Date.now() - t0) / 1000);
-    label.textContent = "Thinking... " + s + "s" + (s > 20 ? " (videos and animations can take a few minutes)" : "");
+    label.textContent = note ? note + " " + s + "s"
+      : "Thinking... " + s + "s" + (s > 20 ? " (videos and animations can take a few minutes)" : "");
   }, 1000);
-  return { stop: function () { clearInterval(timer); d.parentNode.remove(); } };
+  return { stop: function () { clearInterval(timer); d.parentNode.remove(); },
+           note: function (text) { note = text || ""; } };
 }
 
 const SUGGESTIONS = [
@@ -800,6 +803,7 @@ async function send(text) {
         const data = await api("GET", "/api/result/" + j.job_id + "?wait=15");
         if (data.status === "error") throw new Error(data.error);
         if (data.status === "done") result = data;
+        else waiting.note(data.message);
         failures = 0;
       } catch (e) {
         if (e.message.indexOf("tutor") !== -1 || ++failures > 5) throw e;
@@ -1493,10 +1497,10 @@ function keyForm(parent, onSaved) {
   parent.appendChild(msg);
   async function go() {
     if (!key.value.trim()) { msg.className = "err"; msg.textContent = "Paste your key first."; return; }
-    save.disabled = true; msg.className = "muted"; msg.textContent = "Testing the key with Google...";
+    save.disabled = true; msg.className = "muted"; msg.textContent = "Testing the key with Google... (this can take up to a minute when Google is busy)";
     try {
       const r = await api("POST", "/api/settings/key", { key: key.value.trim() });
-      msg.className = "ok"; msg.textContent = r.message;
+      msg.className = r.tested === false ? "muted" : "ok"; msg.textContent = r.message;
       key.value = "";
       if (onSaved) onSaved();
     } catch (e) { msg.className = "err"; msg.textContent = e.message; }

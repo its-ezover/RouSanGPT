@@ -363,6 +363,7 @@ class Session:
         self.gemini_stale = False
         self.quiz = quiz.new_state()          # this chat's quiz (see quiz.py)
         self.lock = threading.Lock()
+        self.on_status = None                 # tells the page "Gemini is busy, retrying..."
 
     # ---- Gemini (online) ----
     def _fresh_gemini_chat(self):
@@ -374,19 +375,30 @@ class Session:
         self.key_version = gemini_client.key_version()
         self.gemini_stale = False
 
+    def _status(self, message):
+        if self.on_status:
+            self.on_status(message)
+
     def send(self, prompt):
-        """If the current model fails, switch to the next one and STAY on it."""
-        for _ in range(len(MODELS) * 2):
+        """If Google is busy, wait and retry the same model (2, 4, 8 s). If the model
+        still fails, switch to the next one and STAY on it."""
+        def busy(attempt, wait):
+            self._status(f"Gemini is busy, retrying ({attempt} of "
+                         f"{len(gemini_client.BUSY_WAITS)})...")
+        for _ in range(len(MODELS)):
             try:
-                return self.chat.send_message(prompt)
+                reply = gemini_client.with_retries(lambda: self.chat.send_message(prompt),
+                                                   MODELS[self.model_index], busy)
+                self._status("")
+                return reply
             except Exception as e:
                 old = MODELS[self.model_index]
                 self.model_index = (self.model_index + 1) % len(MODELS)
-                reason = str(e).replace("\n", " ")[:70]
-                print(f"  ({old} failed: {reason}... switching to {MODELS[self.model_index]})")
+                print(f"  ({old} failed, switching to {MODELS[self.model_index]}. "
+                      f"Details: {e!r})", flush=True)
+                self._status(f"Trying another model ({MODELS[self.model_index]})...")
                 self.chat = make_chat(MODELS[self.model_index], self.chat.get_history())
-                time.sleep(2)
-        raise RuntimeError("All online models failed right now. Please try again in a minute.")
+        raise RuntimeError("Gemini is busy or not answering right now. Please try again in a minute.")
 
     def _ask_gemini(self, prompt):
         if (self.chat is None or self.tools_version != TOOLS_VERSION or self.gemini_stale
@@ -440,7 +452,8 @@ class Session:
             print(f"  (Gemini failed: {str(e)[:60]}... using the local model instead)")
             return self._ask_local(prompt)
 
-    def ask(self, question, language="auto", backend="auto"):
+    def ask(self, question, language="auto", backend="auto", on_status=None):
+        self.on_status = on_status
         started = time.time() - 1
         quiz.use_state(self.quiz)
         found = find_material(question)

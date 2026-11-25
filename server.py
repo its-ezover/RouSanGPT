@@ -195,14 +195,20 @@ def run_job(job_id, chat_id, text, language, backend):
     print(f"  (question received: {text[:60]!r}, language={language}, backend={backend})", flush=True)
     try:
         session = get_session(chat_id)
+        def show(message):                  # for example "Gemini is busy, retrying..."
+            jobs[job_id]["message"] = message
         with session.lock:                  # one question at a time per chat
-            result = session.ask(text, language, backend)
+            result = session.ask(text, language, backend, on_status=show)
         title = history_store.add_exchange(chat_id, text, result)
         print("  (answer ready)", flush=True)
         finish_job(job_id, "done", result={**result, "title": title})
     except Exception as e:
-        traceback.print_exc()
-        finish_job(job_id, "error", error=f"The tutor could not answer: {str(e)[:200]}")
+        traceback.print_exc()                # the full error, for debugging
+        if gemini_client.is_busy(e):
+            reason = "Gemini is very busy right now. Please try again in a minute."
+        else:
+            reason = str(e)[:200]
+        finish_job(job_id, "error", error=f"The tutor could not answer: {reason}")
 
 
 @app.post("/api/chat")
@@ -227,7 +233,12 @@ def result(job_id: str, wait: float = 0):
     if job is None:
         raise HTTPException(404, "Unknown job")
     if job["status"] == "working" and wait > 0:
-        job["event"].wait(min(wait, 15))
+        # wait until the job is done, or its message changes (so "Gemini is busy,
+        # retrying..." shows at once)
+        message, until = job.get("message", ""), time.time() + min(wait, 15)
+        while time.time() < until and job.get("message", "") == message:
+            if job["event"].wait(min(0.5, max(0.0, until - time.time()))):
+                break
     if job["status"] == "working":
         return {"status": "working", "seconds": int(time.time() - job["started"]),
                 "message": job.get("message", "")}
@@ -446,11 +457,13 @@ def get_settings():
 
 @app.post("/api/settings/key")
 def set_key(req: KeyRequest):
-    ok, message = gemini_client.test_key(req.key)
-    if not ok:
+    outcome, message = gemini_client.test_key(req.key)
+    if outcome in (gemini_client.KEY_BAD, gemini_client.KEY_ERROR):
         raise HTTPException(400, message)
     settings.save({"gemini_api_key": req.key.strip()})
-    return {"ok": True, "message": message + " Saved."}
+    if outcome == gemini_client.KEY_BUSY:      # saved, but not tested yet
+        return {"ok": True, "tested": False, "message": message}
+    return {"ok": True, "tested": True, "message": message + " Saved."}
 
 
 @app.post("/api/settings")
