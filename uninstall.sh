@@ -29,7 +29,7 @@ fi
 rm -f "$HOME/.local/bin/rousangpt"
 rm -f "$DATA_HOME/applications/rousangpt.desktop"
 for d in "$DATA_HOME"/icons/hicolor/*/apps; do rm -f "$d/rousangpt.png"; done
-rm -rf "$ROOT/app" "$ROOT/app.new" "$ROOT/venv"
+rm -rf "$ROOT/app" "$ROOT/app.new" "$ROOT/venv" "$ROOT/uv-cache"
 command -v update-desktop-database >/dev/null && update-desktop-database -q "$DATA_HOME/applications" 2>/dev/null || true
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$DATA_HOME/icons/hicolor" 2>/dev/null || true
 echo "RouSanGPT was removed from this computer."

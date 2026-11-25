@@ -3,11 +3,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pypdf import PdfReader
-from pptx import Presentation
-
 import binaries
 
+# The PDF and PowerPoint readers are imported when a file is added, not when the
+# app starts (they take a while to load and most starts never need them).
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 SUPPORTED = (".pdf", ".pptx", ".ppt", ".txt")
 
@@ -22,6 +21,7 @@ def split_text(text, size=800, overlap=150):
 
 
 def read_pdf(path, progress=None):
+    from pypdf import PdfReader
     reader = PdfReader(path)
     total = len(reader.pages)
     for n, page in enumerate(reader.pages, start=1):
@@ -31,6 +31,7 @@ def read_pdf(path, progress=None):
 
 
 def read_pptx(path, progress=None):
+    from pptx import Presentation
     prs = Presentation(path)
     for n, slide in enumerate(prs.slides, start=1):
         parts = []

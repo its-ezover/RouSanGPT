@@ -122,13 +122,23 @@ mv "$NEW_APP" "$APP"
 ok "Program copied (your .env, chats and course files are not part of the program)"
 
 # ---------- 4. Python packages ----------
-bold "Installing the Python packages (the first time this takes a few minutes)"
+bold "Installing the Python packages (the first time this takes a minute or two)"
 if [ -x "$VENV/bin/python" ] && ! "$VENV/bin/python" -c 'import sys' 2>/dev/null; then
     rm -rf "$VENV"            # broken venv (for example after a Python upgrade)
 fi
 [ -x "$VENV/bin/python" ] || "$PYTHON" -m venv "$VENV"
-"$VENV/bin/python" -m pip install --quiet --upgrade pip
-if ! "$VENV/bin/python" -m pip install --quiet --upgrade -r "$APP/requirements.txt"; then
+# uv installs the packages in parallel (much faster than pip); pip only installs uv
+# itself. If uv fails for any reason, pip does the job instead.
+install_packages() {
+    [ -x "$VENV/bin/uv" ] || "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check uv >/dev/null 2>&1 || true
+    if [ -x "$VENV/bin/uv" ]; then
+        UV_CACHE_DIR="$ROOT/uv-cache" "$VENV/bin/uv" pip install --python "$VENV/bin/python" \
+            --upgrade -r "$APP/requirements.txt" && return 0
+        warn "The fast installer (uv) failed; trying again with pip (slower)."
+    fi
+    "$VENV/bin/python" -m pip install --disable-pip-version-check --upgrade -r "$APP/requirements.txt"
+}
+if ! install_packages; then
     fail "Installing the Python packages failed (see above). Check the internet connection and run ./install.sh again."
     exit 1
 fi

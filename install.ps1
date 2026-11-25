@@ -192,6 +192,37 @@ if ($ToInstall.Count -gt 0) {
     }
 }
 
+# Microsoft Visual C++ runtime: onnxruntime (used by the course search) needs a
+# recent one, and without it the app cannot start ("DLL load failed"). Checked here,
+# before the packages, so it is fixed in the same run.
+function VCRuntime-Ok {
+    $dll = Join-Path $env:WINDIR "System32\msvcp140.dll"
+    if (-not (Test-Path $dll)) { return $false }
+    $v = (Get-Item $dll).VersionInfo
+    return ($v.FileMajorPart -gt 14 -or ($v.FileMajorPart -eq 14 -and $v.FileMinorPart -ge 40))
+}
+function Install-VCRuntime {
+    $id = "Microsoft.VCRedist.2015+.x64"
+    if (-not (Has-Winget)) { return $false }
+    Say "  Installing the Microsoft Visual C++ runtime with winget (Windows may ask for permission)..."
+    # "install" does nothing when an older version is there; "upgrade" updates it
+    & winget install -e --id $id --source winget --accept-package-agreements --accept-source-agreements 2>&1 | Out-Host
+    if (-not (VCRuntime-Ok)) {
+        & winget upgrade -e --id $id --source winget --accept-package-agreements --accept-source-agreements 2>&1 | Out-Host
+    }
+    return (VCRuntime-Ok)
+}
+if (VCRuntime-Ok) { Ok "Microsoft Visual C++ runtime" }
+else {
+    Fail "The Microsoft Visual C++ runtime is missing or too old: the app cannot start without it."
+    if ((Has-Winget) -and (Ask "  Install it now with winget?")) {
+        if (Install-VCRuntime) { Ok "Microsoft Visual C++ runtime installed" }
+        else { Warn "It could not be installed now; the installer checks again after the Python packages." }
+    } else {
+        Write-Host "      Download it from https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    }
+}
+
 $Edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($Edge) { Ok "App window: Microsoft Edge (app mode)" }
 else { Warn "Microsoft Edge was not found: the app opens in Chrome, Firefox or your default browser." }
@@ -238,7 +269,7 @@ try {
 Ok "Program copied (your .env, chats and course files are not part of the program)"
 
 # ---------- 5. Python packages ----------
-Say "Installing the Python packages (the first time this takes a few minutes)"
+Say "Installing the Python packages (the first time this takes a minute or two)"
 $VenvPython = Join-Path $Venv "Scripts\python.exe"
 $VenvPythonW = Join-Path $Venv "Scripts\pythonw.exe"
 if (Test-Path $Venv) {
@@ -253,30 +284,70 @@ if (-not (Test-Path $VenvPython)) {
     & $Python -m venv $Venv
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $VenvPython)) { Fail "Could not create the Python environment."; exit 1 }
 }
-$PipOptions = @("--quiet", "--disable-pip-version-check", "--prefer-binary")
-& $VenvPython -m pip install @PipOptions --upgrade pip
-& $VenvPython -m pip install @PipOptions --upgrade -r (Join-Path $App "requirements.txt")
-if ($LASTEXITCODE -ne 0) {
+$Requirements = Join-Path $App "requirements.txt"
+$PipOptions = @("--disable-pip-version-check", "--prefer-binary", "--progress-bar", "on")
+# uv downloads and installs the packages in parallel: several times faster than pip,
+# which fetches and unpacks them one at a time. pip only installs uv itself (one file).
+# UV_NATIVE_TLS: trust the Windows certificate store, like pip does, so networks that
+# inspect HTTPS still work. If uv fails for any reason, pip does the job instead.
+$env:UV_NATIVE_TLS = "true"
+$env:UV_CACHE_DIR = Join-Path $Root "uv-cache"
+$installed = $false
+$Uv = Join-Path $Venv "Scripts\uv.exe"
+if (-not (Test-Path $Uv)) {
+    & $VenvPython -m pip install --quiet @PipOptions uv 2>&1 | Out-Null
+}
+if (Test-Path $Uv) {
+    & $Uv pip install --python $VenvPython --upgrade -r $Requirements
+    $installed = ($LASTEXITCODE -eq 0)
+    if (-not $installed) { Warn "The fast installer (uv) failed; trying again with pip (slower)." }
+}
+if (-not $installed) {
+    & $VenvPython -m pip install @PipOptions --upgrade -r $Requirements
+    $installed = ($LASTEXITCODE -eq 0)
+}
+Remove-Item Env:\UV_NATIVE_TLS, Env:\UV_CACHE_DIR -ErrorAction SilentlyContinue
+if (-not $installed) {
     Fail "Installing the Python packages failed (see above). Check the internet connection and run install.cmd again."
     exit 1
 }
 
 # Load the packages once: a missing Microsoft Visual C++ runtime only shows up here
-# ("DLL load failed"), and the app would otherwise fail without a word.
+# ("DLL load failed"), and the app would otherwise fail without a word. The Python
+# error text is kept quiet and only shown when it cannot be fixed.
 $CheckImports = "import chromadb, onnxruntime, fastapi, uvicorn, google.genai, pptx, pypdf, matplotlib, PIL, numpy, edge_tts, psutil, truststore"
+$script:LoadError = ""
 function Packages-Load {
-    $null | & $VenvPython -X utf8 -c $CheckImports 2>&1 | Out-Host
+    # stored, not shown; "$_" keeps only the text of each line (PowerShell 5.1 would
+    # otherwise dress Python's error lines up as a red "NativeCommandError")
+    $out = $null | & $VenvPython -X utf8 -c $CheckImports 2>&1
+    $script:LoadError = (@($out) | ForEach-Object { "$_" }) -join "`n"
     return ($LASTEXITCODE -eq 0)
 }
 if (-not (Packages-Load)) {
-    Warn "Some Python packages could not be loaded. Usually the Microsoft Visual C++ runtime is missing."
-    if ((Has-Winget) -and (Ask "  Install the Microsoft Visual C++ runtime now with winget?")) {
-        Winget-Install "Microsoft.VCRedist.2015+.x64" "Microsoft Visual C++ runtime" | Out-Null
-    } else {
-        Write-Host "      Download it from https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    if ($script:LoadError -match "DLL load failed") {
+        Warn "Some Python packages need the Microsoft Visual C++ runtime."
+        if ((Has-Winget) -and (Ask "  Install or update the Microsoft Visual C++ runtime now with winget?")) {
+            Install-VCRuntime | Out-Null
+        } else {
+            Write-Host "      Download it from https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        }
     }
-    if (-not (Packages-Load)) {
-        Fail "The Python packages still do not load (see the message above). Install the Visual C++ runtime and run install.cmd again."
+    # a fresh install can take a moment before Windows loads it everywhere
+    $loaded = $false
+    for ($i = 0; $i -lt 3 -and -not $loaded; $i++) {
+        if ($i -gt 0) { Start-Sleep -Seconds 3 }
+        $loaded = Packages-Load
+    }
+    if (-not $loaded) {
+        Write-Host $script:LoadError
+        Fail "The Python packages do not load (see the message above)."
+        if ($script:LoadError -match "DLL load failed") {
+            Write-Host "      Install the Visual C++ runtime (https://aka.ms/vs/17/release/vc_redist.x64.exe),"
+            Write-Host "      restart the computer if it asks to, and run install.cmd again."
+        } else {
+            Write-Host "      Run install.cmd again; if it happens again, see Troubleshooting in README.md."
+        }
         exit 1
     }
 }

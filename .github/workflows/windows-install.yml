@@ -117,6 +117,21 @@ jobs:
           if ($page.StatusCode -ne 200) { "FAIL  the web page"; exit 1 }
           "PASS  the web page loads"
 
+          # Add a course file the way the page does (upload, then wait for the result)
+          $txt = Join-Path $env:RUNNER_TEMP "ci-notes.txt"
+          Set-Content $txt "TCP opens a connection with a three-way handshake: SYN, SYN-ACK, ACK." -Encoding utf8
+          $job = Invoke-RestMethod -Method Post "http://127.0.0.1:$port/api/materials" -Form @{ file = Get-Item $txt }
+          $r = $null
+          for ($i = 0; $i -lt 40; $i++) {
+            $r = Invoke-RestMethod "http://127.0.0.1:$port/api/result/$($job.job_id)?wait=15" -TimeoutSec 30
+            if ($r.status -ne "working") { break }
+          }
+          if ($r.status -ne "done") { "FAIL  adding a course file: $($r | ConvertTo-Json -Compress)"; Show-Log; exit 1 }
+          "PASS  added a course file ($($r.pieces) pieces)"
+          $m = Invoke-RestMethod "http://127.0.0.1:$port/api/materials"
+          if (-not ($m | Where-Object name -eq "ci-notes.txt")) { "FAIL  the file is not in the materials list"; exit 1 }
+          "PASS  the file is in the materials list"
+
           # Update while the app runs: the installer must close it first
           cmd /c "call install.cmd -Yes < NUL"
           if ($LASTEXITCODE -ne 0) { "FAIL  updating while the app runs"; exit 1 }
@@ -148,6 +163,7 @@ jobs:
           function Check($what, $ok) { if ($ok) { "PASS  $what" } else { "FAIL  $what"; $script:fail++ } }
           Check "program removed" (-not (Test-Path "$root\app"))
           Check "environment removed" (-not (Test-Path "$root\venv"))
+          Check "download cache removed" (-not (Test-Path "$root\uv-cache"))
           Check "Start menu shortcut removed" (-not (Test-Path (Join-Path ([Environment]::GetFolderPath("Programs")) "RouSanGPT.lnk")))
           Check "desktop shortcut removed" (-not (Test-Path (Join-Path ([Environment]::GetFolderPath("Desktop")) "RouSanGPT.lnk")))
           Check "removed from Settings > Apps" (-not (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\RouSanGPT"))

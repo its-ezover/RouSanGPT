@@ -326,10 +326,13 @@ def main():
     SERVER_FILE.write_text(json.dumps({"port": port, "pid": os.getpid()}))
     lock.release()
     print(f"  (server running at {url})", flush=True)
-    try:
-        server.agent.warm_up()
-    except Exception as e:
-        print(f"  (warm-up failed: {e})", flush=True)
+    def warm_up():
+        # load the search model while the window opens (questions wait for it)
+        try:
+            server.agent.warm_up()
+        except Exception as e:
+            print(f"  (warm-up failed: {e})", flush=True)
+    threading.Thread(target=warm_up, daemon=True, name="warm-up").start()
 
     stopped = threading.Event()
 

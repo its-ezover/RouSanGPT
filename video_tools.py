@@ -2,11 +2,11 @@ import re
 import tempfile
 import textwrap
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal
 
 from google.genai import types
-from matplotlib import font_manager
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
 
@@ -205,8 +205,8 @@ def render_animation_clip(frame_fn, natural, narration_seconds, out_path):
 def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
     img = Image.new("RGB", (W, H), "#0f172a")
     d = ImageDraw.Draw(img)
-    regular = font_manager.findfont("DejaVu Sans")
-    bold = font_manager.findfont(font_manager.FontProperties(family="DejaVu Sans", weight="bold"))
+    regular = animation_tools.font_path()
+    bold = animation_tools.font_path(bold=True)
     f_title = ImageFont.truetype(bold, 46 if diagram_png else 54)
     f_body = ImageFont.truetype(regular, 36)
     f_small = ImageFont.truetype(regular, 22)
@@ -234,7 +234,7 @@ def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
                 y += 48
             y += 18
 
-    d.text((80, H - 50), "Net.ai - Computer Networks", font=f_small, fill="#94a3b8")
+    d.text((80, H - 50), "RouSanGPT - Computer Networks", font=f_small, fill="#94a3b8")
     d.text((W - 150, H - 50), f"{number} / {total}", font=f_small, fill="#94a3b8")
     img.save(out_path)
 
@@ -247,6 +247,36 @@ def _ffmpeg(args):
 
 def _open_file(path):
     binaries.open_file(path)
+
+
+SCENE_WORKERS = 3          # scenes made at the same time
+
+
+def _make_clip(i, scene, animation, diagram_png, total, tmp):
+    """The narrated clip of one scene. Returns its path."""
+    clip, mp3 = tmp / f"s{i}.mp4", tmp / f"s{i}.mp3"
+    text_to_speech(scene.narration, mp3)
+    if animation:
+        frame_fn, natural = animation
+        silent = tmp / f"a{i}.mp4"
+        render_animation_clip(frame_fn, natural, _audio_seconds(mp3), silent)
+        _ffmpeg([
+            "-i", str(silent), "-i", str(mp3),
+            "-af", "apad",                  # silence after the narration
+            "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-ac", "2",
+            "-shortest", str(clip),
+        ])
+    else:
+        png = tmp / f"s{i}.png"
+        draw_slide(scene.title, scene.bullets, i, total, png, diagram_png)
+        _ffmpeg([
+            "-loop", "1", "-framerate", "30", "-i", str(png), "-i", str(mp3),
+            "-af", "apad=pad_dur=0.6",      # a short pause after speaking
+            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-ar", "44100", "-ac", "2",
+            "-shortest", str(clip),
+        ])
+    return clip
 
 
 def create_video(topic: str, num_scenes: int = 5) -> dict:
@@ -272,42 +302,19 @@ def create_video(topic: str, num_scenes: int = 5) -> dict:
     try:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            clips = []
+            # 1. pictures and animations, one scene after the other (the drawing tools
+            #    are switched into "capture" mode for this, which is not thread-safe)
+            plans = []
             for i, scene in enumerate(scenes, start=1):
-                clip, mp3 = tmp / f"s{i}.mp4", tmp / f"s{i}.mp3"
                 animation = make_scene_animation(scene)
                 diagram_png = None if animation else make_scene_diagram(scene, i)
-                if animation:
-                    kind = scene.diagram_type
-                elif diagram_png:
-                    kind = scene.diagram_type
-                else:
-                    kind = "bullets"
+                kind = scene.diagram_type if (animation or diagram_png) else "bullets"
                 print(f"  (scene {i}/{len(scenes)}: {scene.title} [{kind}])", flush=True)
-
-                text_to_speech(scene.narration, mp3)
-
-                if animation:
-                    frame_fn, natural = animation
-                    silent = tmp / f"a{i}.mp4"
-                    render_animation_clip(frame_fn, natural, _audio_seconds(mp3), silent)
-                    _ffmpeg([
-                        "-i", str(silent), "-i", str(mp3),
-                        "-af", "apad",                  # silence after the narration
-                        "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-ac", "2",
-                        "-shortest", str(clip),
-                    ])
-                else:
-                    png = tmp / f"s{i}.png"
-                    draw_slide(scene.title, scene.bullets, i, len(scenes), png, diagram_png)
-                    _ffmpeg([
-                        "-loop", "1", "-framerate", "30", "-i", str(png), "-i", str(mp3),
-                        "-af", "apad=pad_dur=0.6",      # a short pause after speaking
-                        "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-                        "-c:a", "aac", "-ar", "44100", "-ac", "2",
-                        "-shortest", str(clip),
-                    ])
-                clips.append(clip)
+                plans.append((i, scene, animation, diagram_png))
+            # 2. voice and video of several scenes at the same time: they mostly wait
+            #    for the voice service and for FFmpeg. Same clips, in the same order.
+            with ThreadPoolExecutor(max_workers=SCENE_WORKERS) as pool:
+                clips = list(pool.map(lambda plan: _make_clip(*plan, len(scenes), tmp), plans))
 
             print("  (joining the scenes...)", flush=True)
             list_file = tmp / "list.txt"

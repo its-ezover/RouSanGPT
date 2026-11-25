@@ -123,8 +123,8 @@ few seconds:
 - if neither is installed, it opens in your default browser.
 
 The first time, the **setup screen** asks for your Gemini API key. It is tested
-with Google and stored only on your computer. Then open **Materials** and add your
-course files.
+with Google and stored only on your computer. Then add your course files: drag
+them (or a whole folder) onto the window, or open **Materials** and choose them.
 
 ### 3. Close it
 Just close the window: RouSanGPT stops by itself. **Settings > Quit RouSanGPT**
@@ -173,13 +173,14 @@ The installer needs **no administrator rights** for the app itself. It:
 1. finds Python 3.10 to 3.14 (3.12 is preferred because every package has
    ready-made downloads for it). If none is installed it offers to install 3.12 with
    `winget`;
-2. checks FFmpeg (videos, animations, voice input) and Graphviz (diagrams) and
-   offers to install the missing ones with `winget`. Graphviz's own installer may
-   ask for permission. LibreOffice (old `.ppt` files) and Ollama (local model) are
+2. checks the Microsoft Visual C++ runtime (the app cannot start without it),
+   FFmpeg (videos, animations, voice input) and Graphviz (diagrams) and offers to
+   install the missing ones with `winget`. The Visual C++ and Graphviz installers
+   may ask for permission. LibreOffice (old `.ppt` files) and Ollama (local model) are
    optional;
 3. copies the program to `%LOCALAPPDATA%\RouSanGPT\app`, installs the Python
-   packages (a few minutes the first time) and checks that they load (if the
-   Microsoft Visual C++ runtime is missing, it offers to install it);
+   packages with [uv](https://docs.astral.sh/uv/) (a minute or two the first time;
+   pip if uv fails) and checks that they load;
 4. adds **RouSanGPT** to the Start menu with its icon, and to **Settings > Apps**
    (for uninstalling).
 
@@ -235,9 +236,10 @@ Close the window and RouSanGPT stops by itself, or use **Settings > Quit RouSanG
   this no longer stops it. To silence it everywhere, run in an administrator
   terminal: `winget source disable msstore`. If every download fails with
   certificate errors, check that the computer's date and time are correct.
-- **"Some Python packages could not be loaded" / "DLL load failed":** the Microsoft
-  Visual C++ runtime is missing. The installer offers to install it; or download it
-  from https://aka.ms/vs/17/release/vc_redist.x64.exe and run `install.cmd` again.
+- **"The Python packages do not load" / "DLL load failed":** the Microsoft Visual
+  C++ runtime is missing or too old. The installer offers to install or update it;
+  or download it from https://aka.ms/vs/17/release/vc_redist.x64.exe, restart the
+  computer if it asks to, and run `install.cmd` again.
 - **Only a very new Python is installed:** the installer offers to add Python 3.12
   next to it (both can stay installed); 3.10 to 3.14 are all fine.
 - **Local model:** install Ollama from https://ollama.com/download. The Ollama app
@@ -278,7 +280,8 @@ Then paste your Gemini API key into `.env`. On Windows, start Python with
 written correctly.
 
 ### Course files
-Either add them in the app (**Materials**), or put them in a folder named
+Either add them in the app (drag files or folders onto the window, or use
+**Materials**), or put them in a folder named
 `materials` and build the search database in one go (takes a few minutes):
 ```bash
 python ingest.py
@@ -309,6 +312,10 @@ python chat.py        # terminal app
   and dark. Next to the message box: the language (Auto, English, Arabic).
 - **Sidebar:** your saved chats (search, rename, delete), **Materials** (add or
   remove course files), **Tools** (your formula tools) and **Settings**.
+- **Adding course files:** drop PDF, PPTX, PPT or TXT files, or a folder of them,
+  anywhere on the window (or on the drop zone in **Materials**). Each file shows
+  its progress; other kinds of files are skipped with a note. You can close the
+  panel and keep chatting: the line above the message box says when they are added.
 - While an answer is being prepared, the other chats are grayed out; you can switch
   chats again when it is done.
 - In the terminal app (`python chat.py`): type a question, `/voice` to speak,
@@ -365,7 +372,7 @@ other computers on the network cannot reach it.
    "Tools used", the sources, and the Listen and Copy buttons.
 
 ### Course knowledge (retrieval-augmented generation)
-- **Adding a file** (Materials panel, or `ingest.py`): `ingest_lib.py` reads the
+- **Adding a file** (drag and drop or the Materials panel, or `ingest.py`): `ingest_lib.py` reads the
   text page by page (PDF with pypdf), slide by slide (PPTX with python-pptx; old
   PPT through LibreOffice or catppt) or a few lines at a time (TXT). The text is cut
   into pieces of 800 characters that overlap by 150, so no idea is cut in half.
@@ -529,7 +536,8 @@ with the install command instead of a crash.
 ## Project structure
 | File | Purpose |
 |---|---|
-| `agent.py` | the tutor: course search, prompt, Gemini and local model, tools, media |
+| `agent.py` | the tutor: prompt, Gemini and local model, tools, media |
+| `knowledge.py` | the course database: which files it holds, the search model, searching |
 | `server.py` | web server (FastAPI): chats, answers, materials, tools, voice, settings, app lifecycle |
 | `web/index.html` | the whole user interface (HTML, CSS and JavaScript in one file) |
 | `launcher.py` | desktop app: single instance, server, app window, stopping by itself |

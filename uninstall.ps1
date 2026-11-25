@@ -27,7 +27,7 @@ if (Test-Path $info) {
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath("Programs")) "RouSanGPT.lnk")
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath("Desktop")) "RouSanGPT.lnk")
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\RouSanGPT"
-foreach ($dir in @("app", "app.new", "venv")) {
+foreach ($dir in @("app", "app.new", "venv", "uv-cache")) {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $Root $dir)
 }
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $Root "rousangpt-console.cmd")

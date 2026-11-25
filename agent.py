@@ -9,10 +9,10 @@ import app_paths
 
 os.chdir(app_paths.DATA_DIR)   # always work from the data folder (the repo folder in dev mode)
 
-import chromadb
 from google.genai import types
 
 import gemini_client
+import knowledge
 import settings
 
 import animation_tools
@@ -38,39 +38,12 @@ def local_model():
     return settings.local_model()
 
 
-# ---- The search database ----
-db = chromadb.PersistentClient(path="course_db")
-collection = db.get_or_create_collection("course")   # empty on a fresh install
-
-ANSWER_KEY_WORDS = ["solution", "answer"]            # hidden from the tutor
-HOMEWORK_WORDS = ["hw", "homework", "question"]      # labelled as homework
-
-
-def classify(name):
-    n = name.lower()
-    if n.endswith((".pptx", ".ppt")):
-        return "slides"
-    if any(w in n for w in ANSWER_KEY_WORDS):
-        return "answers"
-    if any(w in n for w in HOMEWORK_WORDS):
-        return "homework"
-    return "other"
-
-
-SOURCES = {"slides": [], "homework": [], "other": [], "answers": []}
-
-
-def refresh_sources():
-    """Re-read which files are in the database (after adding or removing materials)."""
-    groups = {"slides": [], "homework": [], "other": [], "answers": []}
-    names = {m["source"] for m in collection.get(include=["metadatas"])["metadatas"]}
-    for name in sorted(names):
-        groups[classify(name)].append(name)
-    SOURCES.clear()
-    SOURCES.update(groups)
-
-
-refresh_sources()
+# ---- The search database (see knowledge.py) ----
+collection = knowledge.collection
+classify = knowledge.classify
+SOURCES = knowledge.SOURCES
+refresh_sources = knowledge.refresh_sources
+warm_up = knowledge.warm_up
 
 TUTOR_PERSONALITY = """You are RouSanGPT, a friendly and encouraging Computer Networks
 teaching assistant. Explain things simply, with small examples.
@@ -204,11 +177,6 @@ def make_chat(model, history=None):
     return client.chats.create(model=model, config=CONFIG, history=history)
 
 
-def warm_up():
-    """Load the search model now, so the first question is fast."""
-    collection.query(query_texts=["warm up"], n_results=1)
-
-
 def local_available():
     """Is Ollama running? Returns (running, list of downloaded model names)."""
     import local_ai
@@ -236,26 +204,13 @@ def disable_popups():
 
 # ---- Searching the course materials ----
 
-def _search(question, n, files):
-    if not files:
-        return []
-    results = collection.query(query_texts=[question], n_results=n,
-                               where={"source": {"$in": files}})
-    return list(zip(results["documents"][0], results["metadatas"][0]))
-
-
 def find_material(question):
     """Fair search: some pieces from each group. Answer keys are never searched."""
-    found = []
-    groups = [
+    return knowledge.search(question, [
         ("LECTURE SLIDES", SOURCES["slides"], 3),
         ("HOMEWORK QUESTIONS", SOURCES["homework"], 2),
         ("BOOK/OTHER", SOURCES["other"], 3),
-    ]
-    for label, files, n in groups:
-        for doc, meta in _search(question, n, files):
-            found.append((label, doc, meta))
-    return found
+    ])
 
 
 # ---- Reading what the tools did during an answer ----

@@ -253,8 +253,40 @@
   .bye img { width:72px; } .bye h2 { color:var(--text); margin:8px 0 0; }
   .err { color:var(--err); }
 
+  /* ---------- Adding course files: drop zone, upload list, whole-window drop ---------- */
+  .drop { display:flex; flex-direction:column; align-items:center; gap:4px; margin-top:10px; padding:22px 16px;
+          border:2px dashed var(--border); border-radius:var(--radius); background:var(--surface);
+          text-align:center; cursor:pointer; transition:border-color .15s, background .15s; }
+  .drop:hover, .drop:focus-visible { border-color:var(--accent); outline:none; }
+  .drop.over { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+  .drop svg { width:30px; height:30px; color:var(--accent); margin-bottom:4px; }
+  .drop b { font-size:.95rem; }
+  .drop u { color:var(--accent); text-underline-offset:2px; }
+  .drop .muted { font-size:.8rem; }
+  .uploads { margin-top:10px; }
+  .uploads .row { gap:10px; }
+  .uploads .grow { min-width:0; }
+  .uploads .state { flex-shrink:0; max-width:55%; text-align:right; font-size:.85rem; color:var(--muted);
+                    overflow-wrap:anywhere; }
+  .uploads .state.ok { color:var(--ok); } .uploads .state.err { color:var(--err); }
+  .uploads .dots { margin-right:6px; vertical-align:middle; }
+  .uploads .dots i { width:5px; height:5px; }
+  #dropOverlay { position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center;
+                 padding:24px; background:color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter:blur(3px);
+                 pointer-events:none; animation:fade .12s; }
+  #dropOverlay div { display:flex; flex-direction:column; align-items:center; gap:6px; padding:36px 48px;
+                     border:2px dashed var(--accent); border-radius:22px; background:var(--surface);
+                     box-shadow:var(--shadow); text-align:center; }
+  #dropOverlay svg { width:40px; height:40px; color:var(--accent); }
+  #dropOverlay b { font-size:1.1rem; }
+
   @media (max-width: 600px) {
     .prow { grid-template-columns:1fr; }
+    /* lists in the panels: the name gets its own line instead of a thin column */
+    .card .row { flex-wrap:wrap; }
+    .card .row .grow { flex-basis:100%; }
+    .card .row > .muted { flex:1; }
+    .uploads .state { max-width:none; text-align:left; }
     .phead-row { display:none; }
     .hint { display:none; }
     .hero h2 { font-size:1.35rem; }
@@ -358,6 +390,14 @@
   </div>
 </div>
 
+<div id="dropOverlay" class="hidden">
+  <div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+    <b>Drop to add to the course materials</b>
+    <span class="muted">PDF, PPTX, PPT or TXT files, or a folder of them</span>
+  </div>
+</div>
+
 <script>
 const appEl = document.getElementById("app");
 const chatEl = document.getElementById("chat");
@@ -406,6 +446,15 @@ function el(tag, cls, text) {
   return e;
 }
 
+function piecesText(n) { return n + (n === 1 ? " piece" : " pieces"); }
+
+// A picture or video that was deleted from the data folder: a short note, not a broken box
+function mediaGone(node, what) {
+  const note = el("p", "muted", "(This " + what + " is no longer available.)");
+  note.dir = "ltr";                        // also inside an Arabic answer
+  node.replaceWith(note);
+}
+
 function sleep(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
 
 // A small Markdown reader: code blocks, headings, bold, italics, lists, links
@@ -445,7 +494,21 @@ function md(src) {
   return html;
 }
 
-function scrollDown() { chatEl.scrollTop = chatEl.scrollHeight; }
+// Keep the newest message in view. "atBottom" remembers whether the reader is at the
+// end of the chat, so pictures and videos that finish loading later keep it there
+// (but never pull the reader down while they are reading something higher up).
+let atBottom = true, bulk = false;
+chatEl.addEventListener("scroll", function () {
+  atBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 80;
+}, { passive: true });
+function scrollDown(instant) {
+  if (bulk) return;                            // a whole chat is being shown: scroll once at the end
+  if (instant) chatEl.style.scrollBehavior = "auto";
+  chatEl.scrollTop = chatEl.scrollHeight;
+  if (instant) chatEl.style.scrollBehavior = "";
+  atBottom = true;
+}
+function keepAtBottom() { if (atBottom) scrollDown(true); }
 
 function setStatus(text, ms) {
   statusEl.textContent = text || "";
@@ -505,11 +568,16 @@ function addBot(reply, canSpeak) {
     if (m.type === "video") {
       const v = document.createElement("video");
       v.controls = true; v.src = m.url; v.preload = "metadata";
+      v.addEventListener("loadedmetadata", keepAtBottom);
+      v.addEventListener("error", function () { mediaGone(v, "video"); });
       d.appendChild(v);
     } else {
       const a = document.createElement("a");
       a.href = m.url; a.target = "_blank";
-      const img = document.createElement("img"); img.src = m.url;
+      const img = document.createElement("img"); img.src = m.url; img.alt = "";
+      img.decoding = "async";
+      img.addEventListener("load", keepAtBottom);
+      img.addEventListener("error", function () { mediaGone(a, "picture"); });
       a.appendChild(img); d.appendChild(a);
     }
   });
@@ -664,12 +732,15 @@ async function openChat(id) {
   currentChat = id; pendingTitle = null; localStorage.setItem("lastChat", id);
   chatEl.innerHTML = ""; messageCount = data.messages.length;
   if (!messageCount) welcome();
-  data.messages.forEach(function (m) {
-    if (m.role === "user") addUser(m.text); else addBot(m, true);
-  });
+  bulk = true;
+  try {
+    data.messages.forEach(function (m) {
+      if (m.role === "user") addUser(m.text); else addBot(m, true);
+    });
+  } finally { bulk = false; }
   sideEl.classList.remove("open");
-  await refreshList();
-  scrollDown();
+  renderList();                                // the list itself did not change
+  scrollDown(true);
 }
 
 // "+ New chat" shows a blank chat. It is saved (and appears in the sidebar) when you send the first message.
@@ -721,17 +792,18 @@ async function send(text) {
     const j = await api("POST", "/api/chat", {
       chat_id: currentChat, message: text, language: langEl.value, backend: backendEl.value
     });
-    // the answer is prepared in the background: ask for it every 2 seconds
+    // the answer is prepared in the background: the server holds each request until
+    // the answer is ready (at most 15 s), so it shows the moment it is done
     let result = null, failures = 0;
     while (!result) {
-      await sleep(2000);
       try {
-        const data = await api("GET", "/api/result/" + j.job_id);
+        const data = await api("GET", "/api/result/" + j.job_id + "?wait=15");
         if (data.status === "error") throw new Error(data.error);
         if (data.status === "done") result = data;
         failures = 0;
       } catch (e) {
         if (e.message.indexOf("tutor") !== -1 || ++failures > 5) throw e;
+        await sleep(1500);
       }
     }
     waiting.stop();
@@ -823,80 +895,237 @@ async function uploadVoice(blob) {
 const GROUP_NAMES = { slides: "Lecture slides", homework: "Homework", other: "Books and other",
                       answers: "Hidden answer key" };
 
-function showModal(title) { mtitle.textContent = title; mbody.innerHTML = ""; modalEl.classList.remove("hidden"); }
-function hideModal() { modalEl.classList.add("hidden"); }
+function showModal(title) {
+  materialsView = null;                    // openMaterials sets it again for its own panel
+  mtitle.textContent = title; mbody.innerHTML = ""; modalEl.classList.remove("hidden");
+}
+function hideModal() { modalEl.classList.add("hidden"); materialsView = null; }
+
+// ---- Course materials: the panel, and adding files (drag and drop or "choose files") ----
+const MATERIAL_TYPES = [".pdf", ".pptx", ".ppt", ".txt"];
+const UPLOAD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
+const uploads = [];          // files being added: { file, name, state, text }
+let uploading = false;       // the upload loop is running
+let materialsView = null;    // { queue, list } while the Materials panel is open
+
+function isMaterial(name) {
+  const n = name.toLowerCase();
+  return MATERIAL_TYPES.some(function (ext) { return n.endsWith(ext); });
+}
+
+function uploadsActive() {
+  return uploads.some(function (u) { return u.state === "waiting" || u.state === "uploading" || u.state === "adding"; });
+}
 
 async function openMaterials(note) {
   showModal("Course materials");
+  if (!uploadsActive()) uploads.length = 0;         // results of an earlier batch were already shown
   const add = el("div", "card");
   add.appendChild(el("b", null, "Add new files"));
-  add.appendChild(el("p", "muted", "PDF, PPTX, PPT or TXT. File names containing 'solution' or 'answer' " +
-    "become hidden answer keys. Names containing 'hw', 'homework' or 'question' count as homework. " +
-    "Big books can take several minutes."));
+  add.appendChild(el("p", "muted", "File names containing 'solution' or 'answer' become hidden answer keys. " +
+    "Names containing 'hw', 'homework' or 'question' count as homework. Big books can take several minutes."));
   const picker = document.createElement("input");
-  picker.type = "file"; picker.multiple = true; picker.accept = ".pdf,.pptx,.ppt,.txt";
-  const go = el("button", "small", "Upload and add");
-  go.style.marginLeft = "8px";
-  const progress = el("p", "muted", note || "");
-  go.onclick = function () {
-    if (picker.files.length) uploadMaterials(Array.from(picker.files), progress, go);
-  };
-  add.appendChild(picker); add.appendChild(go); add.appendChild(progress);
+  picker.type = "file"; picker.multiple = true; picker.accept = MATERIAL_TYPES.join(",");
+  picker.className = "hidden";
+  picker.onchange = function () { addUploads(Array.from(picker.files)); picker.value = ""; };
+  const drop = el("div", "drop");
+  drop.tabIndex = 0; drop.setAttribute("role", "button");
+  drop.innerHTML = UPLOAD_ICON + "<b>Drop files here</b><span>or <u>choose files</u></span>";
+  drop.appendChild(el("span", "muted", "PDF, PPTX, PPT or TXT - you can also drop them anywhere in the window"));
+  drop.onclick = function () { picker.click(); };
+  drop.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } };
+  const queue = el("div", "uploads");
+  add.appendChild(picker); add.appendChild(drop);
+  if (note) add.appendChild(el("p", "ok", note));
+  add.appendChild(queue);
   mbody.appendChild(add);
 
-  const box = el("div", "card", "Loading...");
-  mbody.appendChild(box);
-  try {
-    const files = await api("GET", "/api/materials");
-    box.textContent = "";
-    box.appendChild(el("b", null, "In the tutor's knowledge (" + files.length + " files)"));
-    files.forEach(function (f) {
-      const row = el("div", "row");
-      row.appendChild(el("span", "grow", f.name));
-      row.appendChild(el("span", "muted", (GROUP_NAMES[f.group] || f.group) + " - " + f.pieces + " pieces"));
-      const del = el("button", "small danger", "Remove");
-      del.onclick = async function () {
-        if (!confirm("Remove " + f.name + " from the tutor's knowledge?")) return;
-        try {
-          await api("DELETE", "/api/materials/" + encodeURIComponent(f.name));
-          openMaterials("Removed " + f.name);
-        } catch (e) { setStatus("Could not remove: " + e.message, 6000); }
-      };
-      row.appendChild(del);
-      box.appendChild(row);
-    });
-  } catch (e) {
-    box.textContent = "Could not load the list: " + e.message;
-  }
+  const list = el("div", "card", "Loading...");
+  mbody.appendChild(list);
+  materialsView = { queue: queue, list: list, drop: drop };
+  renderUploads();
+  await renderMaterialList();
 }
 
-async function uploadMaterials(files, progress, button) {
-  button.disabled = true;
-  const report = [];
-  for (const f of files) {
-    progress.textContent = "Uploading " + f.name + "...";
+async function renderMaterialList() {
+  const view = materialsView;
+  if (!view) return;
+  let files;
+  try { files = await api("GET", "/api/materials"); }
+  catch (e) { view.list.textContent = "Could not load the list: " + e.message; return; }
+  if (materialsView !== view) return;                // the panel was closed or opened again meanwhile
+  const box = view.list;
+  box.textContent = "";
+  box.appendChild(el("b", null, "In the tutor's knowledge (" + files.length + " files)"));
+  if (!files.length) box.appendChild(el("p", "muted", "Nothing yet. Add your slides, books and homework above."));
+  files.forEach(function (f) {
+    const row = el("div", "row");
+    row.appendChild(el("span", "grow", f.name));
+    row.appendChild(el("span", "muted", (GROUP_NAMES[f.group] || f.group) + " - " + piecesText(f.pieces)));
+    const del = el("button", "small danger", "Remove");
+    del.onclick = async function () {
+      if (!confirm("Remove " + f.name + " from the tutor's knowledge?")) return;
+      del.disabled = true;
+      try {
+        await api("DELETE", "/api/materials/" + encodeURIComponent(f.name));
+        renderMaterialList();
+        checkStatus();
+      } catch (e) { del.disabled = false; setStatus("Could not remove: " + e.message, 6000); }
+    };
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+function renderUploads() {
+  if (!materialsView) return;
+  const box = materialsView.queue;
+  box.textContent = "";
+  uploads.forEach(function (u) {
+    const row = el("div", "row");
+    row.appendChild(el("span", "grow", u.name));
+    const state = el("span", "state" + (u.state === "done" ? " ok" : u.state === "failed" ? " err" : ""));
+    if (u.state === "uploading" || u.state === "adding") {
+      const dots = el("span", "dots"); dots.innerHTML = "<i></i><i></i><i></i>";
+      state.appendChild(dots);
+    }
+    state.appendChild(document.createTextNode(u.text));
+    row.appendChild(state);
+    box.appendChild(row);
+  });
+}
+
+// One line under the chat while the panel is closed: "Adding course files: 2 of 5 done"
+function uploadSummary() {
+  if (materialsView) return;
+  const finished = uploads.filter(function (u) { return u.state === "done" || u.state === "failed"; }).length;
+  if (uploadsActive()) { setStatus("Adding course files: " + finished + " of " + uploads.length + " done..."); return; }
+  const failed = uploads.filter(function (u) { return u.state === "failed"; }).length;
+  setStatus(failed ? "Course files added, but " + failed + " could not be added. Open Materials to see why."
+                   : "Course files added (" + finished + "). The tutor can use them now.", 8000);
+}
+
+function setUpload(u, state, text) {
+  u.state = state; u.text = text;
+  renderUploads(); uploadSummary();
+}
+
+function addUploads(files) {
+  if (!uploadsActive()) uploads.length = 0;
+  files.forEach(function (f) {
+    if (isMaterial(f.name)) uploads.push({ file: f, name: f.name, state: "waiting", text: "waiting" });
+    else uploads.push({ name: f.name, state: "failed", text: "skipped: only PDF, PPTX, PPT or TXT" });
+  });
+  if (!materialsView) openMaterials();
+  renderUploads();
+  runUploads();
+}
+
+// Files are sent one after the other; the server adds them to the knowledge in the
+// same order, while the next ones are already being sent.
+async function runUploads() {
+  if (uploading) return;
+  uploading = true;
+  const watching = [];
+  let u;
+  while ((u = uploads.find(function (x) { return x.state === "waiting"; }))) {
+    setUpload(u, "uploading", "sending...");
     try {
-      const fd = new FormData(); fd.append("file", f, f.name);
+      const fd = new FormData(); fd.append("file", u.file, u.name);
       const r = await fetch("/api/materials", { method: "POST", body: fd });
       let j = null; try { j = await r.json(); } catch (e) {}
       if (!r.ok) throw new Error((j && j.detail) || ("Error " + r.status));
-      while (true) {
-        await sleep(2000);
-        const s = await api("GET", "/api/result/" + j.job_id);
-        if (s.status === "working") {
-          progress.textContent = "Adding " + f.name + "... " + (s.message || "") + " (" + s.seconds + "s)";
-          continue;
-        }
-        if (s.status === "error") throw new Error(s.error);
-        report.push(s.name + ": " + s.pieces + " pieces (" + (GROUP_NAMES[s.group] || s.group) + ")");
-        break;
-      }
+      setUpload(u, "adding", "reading");
+      watching.push(watchUpload(u, j.job_id));
     } catch (e) {
-      report.push(f.name + ": FAILED - " + e.message);
+      setUpload(u, "failed", "failed: " + e.message);
     }
   }
-  openMaterials("Done. " + report.join("  |  "));
+  uploading = false;
+  await Promise.all(watching);
+  if (!uploadsActive()) { renderMaterialList(); checkStatus(); }
 }
+
+async function watchUpload(u, jobId) {
+  let failures = 0;
+  while (true) {
+    let s;
+    try { s = await api("GET", "/api/result/" + jobId + "?wait=2"); failures = 0; }
+    catch (e) {
+      if (++failures > 5) { setUpload(u, "failed", "failed: " + e.message); return; }
+      await sleep(1000); continue;
+    }
+    if (s.status === "working") {
+      if (u.text !== (s.message || "adding")) setUpload(u, "adding", s.message || "adding");
+      continue;
+    }
+    if (s.status === "error") { setUpload(u, "failed", s.error.replace("Could not add " + u.name + ": ", "failed: ")); return; }
+    setUpload(u, "done", piecesText(s.pieces) + " - " + (GROUP_NAMES[s.group] || s.group));
+    return;
+  }
+}
+
+// Files dropped on the window (folders too: their files are added)
+async function filesFromDrop(dt) {
+  const plain = Array.from(dt.files || []);
+  // the entries must be read now: the browser empties the drop data after this event
+  const entries = Array.from(dt.items || []).map(function (i) {
+    return i.kind === "file" && i.webkitGetAsEntry ? i.webkitGetAsEntry() : null;
+  }).filter(Boolean);
+  if (!entries.some(function (e) { return e.isDirectory; })) return plain;
+  const out = [];
+  async function walk(entry, depth) {
+    if (entry.isFile) {
+      try { out.push(await new Promise(function (ok, bad) { entry.file(ok, bad); })); } catch (e) {}
+    } else if (entry.isDirectory && depth < 6) {
+      const reader = entry.createReader();
+      while (true) {
+        const batch = await new Promise(function (ok, bad) { reader.readEntries(ok, bad); }).catch(function () { return []; });
+        if (!batch.length) break;
+        for (const child of batch) await walk(child, depth + 1);
+      }
+    }
+  }
+  for (const e of entries) await walk(e, 0);
+  return out;
+}
+
+const dropOverlay = document.getElementById("dropOverlay");
+let dragDepth = 0;
+function draggingFiles(e) {
+  return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") !== -1;
+}
+function canDropHere() { return !document.querySelector(".setup"); }
+function dragEnded() {
+  dragDepth = 0;
+  dropOverlay.classList.add("hidden");
+  if (materialsView) materialsView.drop.classList.remove("over");
+}
+window.addEventListener("dragenter", function (e) {
+  if (!draggingFiles(e) || !canDropHere()) return;
+  e.preventDefault();
+  dragDepth++;
+  // the open Materials panel has its own drop zone: light it up instead
+  if (materialsView) materialsView.drop.classList.add("over");
+  else dropOverlay.classList.remove("hidden");
+});
+window.addEventListener("dragover", function (e) {
+  if (!draggingFiles(e)) return;
+  e.preventDefault();                               // allow dropping (and never open the file in the window)
+  e.dataTransfer.dropEffect = canDropHere() ? "copy" : "none";
+});
+window.addEventListener("dragleave", function (e) {
+  if (!draggingFiles(e)) return;
+  if (--dragDepth <= 0) dragEnded();
+});
+window.addEventListener("drop", async function (e) {
+  if (!draggingFiles(e)) return;
+  e.preventDefault();
+  dragEnded();
+  if (!canDropHere()) return;
+  const files = await filesFromDrop(e.dataTransfer);
+  if (files.length) addUploads(files);
+});
 
 // ---- Tools panel: formula tools anyone can create ----
 const FORMULA_FUNCTIONS = ["sqrt", "log2", "log10", "ln", "exp", "ceil", "floor", "abs",
@@ -1412,8 +1641,7 @@ async function renderLocal(box, note) {
       try {
         const j = await api("POST", "/api/local/pull", { model: model });
         while (true) {
-          await sleep(1000);
-          const s = await api("GET", "/api/result/" + j.job_id);
+          const s = await api("GET", "/api/result/" + j.job_id + "?wait=1");
           if (s.status === "working") {
             msg.textContent = s.message || "working...";
             if (typeof s.percent === "number") fill.style.width = s.percent + "%";

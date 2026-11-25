@@ -34,6 +34,8 @@ def init():
                 extra TEXT NOT NULL DEFAULT '{}',
                 created REAL NOT NULL
             );
+            -- finds a chat's messages without reading every message
+            CREATE INDEX IF NOT EXISTS messages_by_chat ON messages (chat_id, id);
             """
         )
 

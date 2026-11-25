@@ -4,11 +4,11 @@ import time
 from pathlib import Path
 from typing import Literal
 
-import chromadb
 from google.genai import types
 from pydantic import BaseModel
 
 import gemini_client
+import knowledge
 
 client = gemini_client.LazyClient(timeout_ms=60000)   # uses the key from Settings or .env
 MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash"]
@@ -31,43 +31,13 @@ class Quiz(BaseModel):
 # The quiz currently being played. The answers live here, hidden from the AI.
 _ACTIVE = {"questions": [], "answered": {}}
 
-_collection = None
-_slide_files = []
-_other_files = []
-
-
-def _get_collection():
-    global _collection, _slide_files, _other_files
-    if _collection is None:
-        db = chromadb.PersistentClient(path="course_db")
-        _collection = db.get_or_create_collection("course")
-        names = {m["source"] for m in _collection.get(include=["metadatas"])["metadatas"]}
-        _slide_files = sorted(n for n in names if n.lower().endswith((".pptx", ".ppt")))
-        # books and other notes only: no solutions, answers or homework files
-        _other_files = sorted(
-            n for n in names
-            if n not in _slide_files
-            and not any(w in n.lower() for w in ["solution", "answer", "hw", "homework", "question"])
-        )
-    return _collection, _slide_files, _other_files
-
 
 def _course_excerpts(topic):
-    """Find course material about the topic: slides first, then books."""
-    collection, slides, others = _get_collection()
-    parts = []
-
-    def add(files, n):
-        if not files:
-            return
-        r = collection.query(query_texts=[topic], n_results=n,
-                             where={"source": {"$in": files}})
-        for doc, meta in zip(r["documents"][0], r["metadatas"][0]):
-            parts.append(f"[{meta['source']} - {meta['location']}]\n{doc}")
-
-    add(slides, 4)
-    add(others, 3)
-    return "\n\n".join(parts)
+    """Find course material about the topic: slides first, then books (never
+    homework or answer keys)."""
+    found = knowledge.search(topic, [("slides", knowledge.SOURCES["slides"], 4),
+                                     ("other", knowledge.SOURCES["other"], 3)])
+    return "\n\n".join(f"[{meta['source']} - {meta['location']}]\n{doc}" for _, doc, meta in found)
 
 
 def _normalize(text):

@@ -1,10 +1,10 @@
 import math
 import re
+import subprocess
 import tempfile
 from functools import lru_cache
 from pathlib import Path
 
-from matplotlib import font_manager
 from PIL import Image, ImageDraw, ImageFont
 
 import binaries
@@ -18,12 +18,18 @@ _CAPTURE = None   # video_tools uses this to borrow the drawing code
 # ---------- Drawing helpers ----------
 
 @lru_cache(maxsize=None)
-def font(size, bold=False):
+def font_path(bold=False):
+    """DejaVu Sans, which comes with matplotlib. Imported here, not at the top:
+    the first import builds a font list, which would slow down every app start."""
+    from matplotlib import font_manager
     if bold:
-        path = font_manager.findfont(font_manager.FontProperties(family="DejaVu Sans", weight="bold"))
-    else:
-        path = font_manager.findfont("DejaVu Sans")
-    return ImageFont.truetype(path, size)
+        return font_manager.findfont(font_manager.FontProperties(family="DejaVu Sans", weight="bold"))
+    return font_manager.findfont("DejaVu Sans")
+
+
+@lru_cache(maxsize=None)
+def font(size, bold=False):
+    return ImageFont.truetype(font_path(bold), size)
 
 
 def ease(x):
@@ -41,15 +47,35 @@ def new_frame(title):
 
 
 def render_video(frame_fn, duration, out_path):
-    """Draw every frame with frame_fn(time_in_seconds), then let FFmpeg make the MP4."""
+    """Draw every frame with frame_fn(time_in_seconds) and hand it straight to FFmpeg,
+    which makes the MP4 while the next frames are drawn (no picture files in between)."""
     total = int(duration * FPS)
-    with tempfile.TemporaryDirectory() as tmp:
-        for i in range(total):
-            if i % 90 == 0:
-                print(f"  (drawing frames {i}/{total}...)", flush=True)
-            frame_fn(i / FPS).save(f"{tmp}/f{i:05d}.png", compress_level=1)
-        binaries.run_ffmpeg(["-framerate", str(FPS), "-i", f"{tmp}/f%05d.png",
-                             "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out_path)])
+    cmd = [binaries.require_tool("ffmpeg"), "-y", "-loglevel", "error",
+           "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-framerate", str(FPS),
+           "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out_path)]
+    with tempfile.TemporaryFile() as errors:          # a file, so FFmpeg can never block on it
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                                stderr=errors, **binaries.NO_WINDOW)
+        try:
+            for i in range(total):
+                if i % 90 == 0:
+                    print(f"  (drawing frames {i}/{total}...)", flush=True)
+                frame = frame_fn(i / FPS)
+                if frame.mode != "RGB":
+                    frame = frame.convert("RGB")
+                if frame.size != (W, H):
+                    raise ValueError(f"a frame is {frame.size[0]}x{frame.size[1]}, not {W}x{H}")
+                proc.stdin.write(frame.tobytes())
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass                                       # FFmpeg stopped: its message is below
+        except BaseException:
+            proc.kill()
+            proc.wait()
+            raise
+        if proc.wait() != 0:
+            errors.seek(0)
+            raise RuntimeError("ffmpeg failed: " + errors.read().decode(errors="replace")[-300:])
 
 
 def _clean_name(name):

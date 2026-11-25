@@ -1,4 +1,5 @@
 import re
+import shutil
 import tempfile
 import threading
 import time
@@ -18,6 +19,7 @@ import formula_tools
 import gemini_client
 import history_store
 import ingest_lib
+import knowledge
 import local_ai
 import settings
 import tts
@@ -32,6 +34,7 @@ app = FastAPI(title="RouSanGPT")
 sessions = {}                   # chat id -> the tutor's memory of that chat
 sessions_lock = threading.Lock()
 jobs = {}                       # job id -> what is happening with it
+JOB_KEEP = 3600                 # results nobody picked up are forgotten after an hour
 
 # Voices for "Listen" (tried in this order)
 VOICES_AR = ["ar-JO-SanaNeural", "ar-SA-ZariyahNeural", "ar-EG-SalmaNeural"]
@@ -44,6 +47,25 @@ def get_session(chat_id):
         if chat_id not in sessions:
             sessions[chat_id] = agent.Session(history=history_store.history_for_model(chat_id))
         return sessions[chat_id]
+
+
+def new_job(message=""):
+    """Start tracking a background job. Returns its id."""
+    now = time.time()
+    for old_id, old in list(jobs.items()):           # forget results nobody picked up
+        if old["status"] != "working" and now - old.get("finished", now) > JOB_KEEP:
+            jobs.pop(old_id, None)
+    job_id = uuid.uuid4().hex
+    jobs[job_id] = {"status": "working", "started": now, "message": message,
+                    "event": threading.Event()}
+    return job_id
+
+
+def finish_job(job_id, status, **fields):
+    """status: "done" (with result=...) or "error" (with error=...)."""
+    job = jobs[job_id]
+    job.update(status=status, finished=time.time(), **fields)
+    job["event"].set()                               # wakes up a waiting /api/result
 
 
 class ChatRequest(BaseModel):
@@ -160,11 +182,10 @@ def run_job(job_id, chat_id, text, language, backend):
             result = session.ask(text, language, backend)
         title = history_store.add_exchange(chat_id, text, result)
         print("  (answer ready)", flush=True)
-        jobs[job_id].update(status="done", result={**result, "title": title})
+        finish_job(job_id, "done", result={**result, "title": title})
     except Exception as e:
         traceback.print_exc()
-        jobs[job_id].update(status="error",
-                            error=f"The tutor could not answer: {str(e)[:200]}")
+        finish_job(job_id, "error", error=f"The tutor could not answer: {str(e)[:200]}")
 
 
 @app.post("/api/chat")
@@ -174,18 +195,22 @@ def chat(req: ChatRequest):
         raise HTTPException(400, "Empty message")
     if not history_store.exists(req.chat_id):
         raise HTTPException(404, "Chat not found")
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "working", "started": time.time()}
+    job_id = new_job()
     threading.Thread(target=run_job, args=(job_id, req.chat_id, text, req.language, req.backend),
                      daemon=True).start()
     return {"job_id": job_id}
 
 
 @app.get("/api/result/{job_id}")
-def result(job_id: str):
+def result(job_id: str, wait: float = 0):
+    """The result of a background job. wait: seconds to wait for it to finish (at
+    most 15) - the answer then arrives the moment it is ready, without asking again
+    and again."""
     job = jobs.get(job_id)
     if job is None:
         raise HTTPException(404, "Unknown job")
+    if job["status"] == "working" and wait > 0:
+        job["event"].wait(min(wait, 15))
     if job["status"] == "working":
         return {"status": "working", "seconds": int(time.time() - job["started"]),
                 "message": job.get("message", "")}
@@ -204,11 +229,7 @@ ingesting = {"count": 0}                # files being added right now (never qui
 
 @app.get("/api/materials")
 def list_materials():
-    counts = {}
-    for m in agent.collection.get(include=["metadatas"])["metadatas"]:
-        counts[m["source"]] = counts.get(m["source"], 0) + 1
-    return [{"name": n, "group": agent.classify(n), "pieces": c}
-            for n, c in sorted(counts.items())]
+    return knowledge.materials()
 
 
 def run_ingest(job_id, path):
@@ -222,16 +243,20 @@ def run_ingest(job_id, path):
 
 def _run_ingest(job_id, path, progress):
     try:
+        if ingest_lock.locked():
+            progress("waiting for the file before it")
         with ingest_lock:
+            progress("reading")
+            knowledge.warm_up()                 # load the search model safely, once
             pieces = ingest_lib.add_file(agent.collection, path, progress)
             agent.refresh_sources()
         if pieces == 0:
             raise ValueError("no text could be read from this file")
-        jobs[job_id].update(status="done", result={
+        finish_job(job_id, "done", result={
             "name": path.name, "pieces": pieces, "group": agent.classify(path.name)})
     except Exception as e:
         traceback.print_exc()
-        jobs[job_id].update(status="error", error=f"Could not add {path.name}: {str(e)[:200]}")
+        finish_job(job_id, "error", error=f"Could not add {path.name}: {str(e)[:200]}")
 
 
 @app.post("/api/materials")
@@ -241,9 +266,9 @@ def upload_material(file: UploadFile = File(...)):
         raise HTTPException(400, "Supported files: " + ", ".join(ingest_lib.SUPPORTED))
     MATERIALS.mkdir(exist_ok=True)
     path = MATERIALS / name
-    path.write_bytes(file.file.read())
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "working", "started": time.time(), "message": "reading"}
+    with open(path, "wb") as out:               # copied in pieces, not all in memory
+        shutil.copyfileobj(file.file, out, 1024 * 1024)
+    job_id = new_job("reading")
     ingesting["count"] += 1
     threading.Thread(target=run_ingest, args=(job_id, path), daemon=True).start()
     return {"job_id": job_id}
@@ -429,10 +454,10 @@ def run_pull(job_id, model):
         jobs[job_id].update(message=text, percent=pct)
     try:
         local_ai.pull(model, progress)
-        jobs[job_id].update(status="done", result={"model": model})
+        finish_job(job_id, "done", result={"model": model})
     except Exception as e:
         traceback.print_exc()
-        jobs[job_id].update(status="error", error=f"Could not download {model}: {str(e)[:200]}")
+        finish_job(job_id, "error", error=f"Could not download {model}: {str(e)[:200]}")
 
 
 @app.post("/api/local/pull")
@@ -442,8 +467,7 @@ def local_pull(req: ModelRequest):
         raise HTTPException(400, "That is not a valid model name.")
     if local_ai.server_version() is None:
         raise HTTPException(400, "Ollama is not running. Start it first.")
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "working", "started": time.time(), "message": "starting download"}
+    job_id = new_job("starting download")
     threading.Thread(target=run_pull, args=(job_id, model), daemon=True).start()
     return {"job_id": job_id}
 
