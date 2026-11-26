@@ -169,6 +169,36 @@ def _start():
     raise RuntimeError("Ollama did not start. See logs/ollama.log in the data folder.")
 
 
+# Local models answer much sooner without long hidden "thinking", so ask every model for
+# the least it allows. Ollama's think=False works for models it lists as "thinking";
+# gpt-oss cannot stop thinking, only think less; Inkling reads its effort from a system
+# line (Ollama cannot pass reasoning_effort to it); other models do not think at all.
+INKLING_EFFORT = "Thinking effort level: 0.2"
+_thinking_cache = {}
+
+
+def fast_thinking(model):
+    """How to ask `model` for low thinking effort: (extra ollama.chat arguments, system lines)."""
+    if model in _thinking_cache:
+        return _thinking_cache[model]
+    import ollama
+    try:
+        info = ollama.show(model)
+        caps = [str(c) for c in (info.capabilities or [])]
+        family = str(getattr(info.details, "family", "") or "").lower()
+    except Exception:
+        return {}, ([INKLING_EFFORT] if "inkling" in model.lower() else [])   # do not cache
+    name = model.lower()
+    if "thinking" in caps:
+        result = ({"think": "low"} if "gpt-oss" in name or "gptoss" in family else {"think": False}), []
+    elif "inkling" in family or "inkling" in name:
+        result = {}, [INKLING_EFFORT]
+    else:
+        result = {}, []
+    _thinking_cache[model] = result
+    return result
+
+
 def is_installed():
     return binaries.find_tool("ollama") is not None
 

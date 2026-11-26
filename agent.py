@@ -420,23 +420,30 @@ class Session:
     # ---- Local model (Ollama) ----
     def _ask_local(self, prompt):
         import ollama
+        import local_ai
+        model = local_model()
+        think_args, think_lines = local_ai.fast_thinking(model)   # never think at high effort
         messages = [{"role": "system", "content": TUTOR_PERSONALITY}]
-        if "inkling" in local_model().lower():
-            # Inkling thinks at "high" (0.9) unless told otherwise, and Ollama cannot pass
-            # reasoning_effort to it. Low effort answers about 25% sooner.
-            messages.append({"role": "system", "content": "Thinking effort level: 0.2"})
+        messages += [{"role": "system", "content": line} for line in think_lines]
         for m in self.transcript[-20:]:
             messages.append({"role": "user" if m["role"] == "user" else "assistant",
                              "content": m["text"]})
         messages.append({"role": "user", "content": prompt})
         names, paths = [], []
-        model = local_model()
         label = f"local: {model}"
         self.gemini_stale = True                 # Gemini's memory misses this turn
         for _ in range(6):                       # at most 6 rounds of tool use
-            response = ollama.chat(model=model, messages=messages,
-                                   tools=list(TOOL_MAP.values()),
-                                   keep_alive=LOCAL_KEEP_ALIVE)
+            try:
+                response = ollama.chat(model=model, messages=messages,
+                                       tools=list(TOOL_MAP.values()),
+                                       keep_alive=LOCAL_KEEP_ALIVE, **think_args)
+            except ollama.ResponseError as e:
+                if not think_args or "think" not in str(e).lower():
+                    raise
+                think_args = {}                  # this model does not take a thinking setting
+                response = ollama.chat(model=model, messages=messages,
+                                       tools=list(TOOL_MAP.values()),
+                                       keep_alive=LOCAL_KEEP_ALIVE)
             message = response.message
             if not message.tool_calls:
                 return message.content or "", list(dict.fromkeys(names)), paths, label
