@@ -45,7 +45,11 @@ async def only_this_computer(request: Request, call_next):
     origin = request.headers.get("origin")
     if origin is not None and origin.lower() not in (f"http://{host}".lower(), f"https://{host}".lower()):
         return JSONResponse({"detail": "Requests from other web sites are not allowed."}, status_code=403)
-    return await call_next(request)
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        # always check for a newer page, so an updated app never shows an old one
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 sessions = {}                   # chat id -> the tutor's memory of that chat
@@ -152,6 +156,7 @@ def status():
             "has_key": bool(settings.api_key()),
             "default_language": s["default_language"], "default_backend": s["default_backend"],
             "local_running": running, "local_ready": running and local_ai.has_model(models, wanted),
+            "local_installed": running or local_ai.is_installed(),
             "local_model": wanted}
 
 

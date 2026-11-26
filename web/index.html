@@ -1451,6 +1451,9 @@ async function checkStatus() {
     if (s.local_ready) {
       local.disabled = false;
       local.textContent = "Local model (" + s.local_model + ")";
+    } else if (!s.local_running && s.local_installed) {
+      local.disabled = false;                // choosing it (or chatting) starts Ollama
+      local.textContent = "Local model (starts Ollama)";
     } else {
       local.disabled = true;
       local.textContent = "Local model (" + (s.local_running ? s.local_model + " not downloaded" : "Ollama not running") + ")";
@@ -1731,7 +1734,16 @@ function store(key, value) { try { localStorage.setItem(key, value); } catch (e)
 langEl.value = localStorage.getItem("lang") || "auto";
 langEl.onchange = function () { localStorage.setItem("lang", langEl.value); };
 backendEl.value = localStorage.getItem("backend") || "auto";
-backendEl.onchange = function () { localStorage.setItem("backend", backendEl.value); };
+backendEl.onchange = async function () {
+  localStorage.setItem("backend", backendEl.value);
+  const local = backendEl.querySelector('option[value="local"]');
+  if (backendEl.value === "local" && local.textContent.indexOf("starts Ollama") >= 0) {
+    local.textContent = "Local model (starting Ollama...)";
+    try { await api("POST", "/api/local/start"); }
+    catch (e) { alert("Could not start Ollama: " + e.message); }
+    checkStatus();
+  }
+};
 if (localStorage.getItem("sideCollapsed") === "1") appEl.classList.add("collapsed");
 
 micBtn.innerHTML = ICON.mic;

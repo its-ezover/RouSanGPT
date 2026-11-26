@@ -179,6 +179,11 @@ def make_chat(model, history=None):
     return client.chats.create(model=model, config=CONFIG, history=history)
 
 
+# Keep the local model loaded between questions: reloading it and re-reading the
+# tutor's instructions adds about 20 seconds. Ollama stops with the app anyway.
+LOCAL_KEEP_ALIVE = "30m"
+
+
 def local_available():
     """Is Ollama running? Returns (running, list of downloaded model names)."""
     import local_ai
@@ -416,6 +421,10 @@ class Session:
     def _ask_local(self, prompt):
         import ollama
         messages = [{"role": "system", "content": TUTOR_PERSONALITY}]
+        if "inkling" in local_model().lower():
+            # Inkling thinks at "high" (0.9) unless told otherwise, and Ollama cannot pass
+            # reasoning_effort to it. Low effort answers about 25% sooner.
+            messages.append({"role": "system", "content": "Thinking effort level: 0.2"})
         for m in self.transcript[-20:]:
             messages.append({"role": "user" if m["role"] == "user" else "assistant",
                              "content": m["text"]})
@@ -426,7 +435,8 @@ class Session:
         self.gemini_stale = True                 # Gemini's memory misses this turn
         for _ in range(6):                       # at most 6 rounds of tool use
             response = ollama.chat(model=model, messages=messages,
-                                   tools=list(TOOL_MAP.values()))
+                                   tools=list(TOOL_MAP.values()),
+                                   keep_alive=LOCAL_KEEP_ALIVE)
             message = response.message
             if not message.tool_calls:
                 return message.content or "", list(dict.fromkeys(names)), paths, label
@@ -446,8 +456,24 @@ class Session:
         return ("Sorry, the local model could not finish this request.",
                 list(dict.fromkeys(names)), paths, label)
 
+    def _start_ollama(self):
+        """Start Ollama when the local model is needed and it is not running yet."""
+        import local_ai
+        if local_ai.server_version() is not None:
+            return True
+        if not local_ai.is_installed():
+            return False
+        self._status("Starting Ollama...")
+        try:
+            local_ai.start()
+        finally:
+            self._status("")
+        return True
+
     def _answer(self, prompt, backend):
         if backend == "local":
+            if not self._start_ollama():
+                raise RuntimeError("Ollama is not installed. Install it from https://ollama.com/download")
             return self._ask_local(prompt)
         try:
             return self._ask_gemini(prompt)

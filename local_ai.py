@@ -3,6 +3,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 import urllib.request
 from pathlib import Path
 
@@ -22,6 +24,7 @@ MODEL_CHOICES = [
 ]
 
 _started = None          # the "ollama serve" process RouSanGPT started, if any
+_start_lock = threading.Lock()   # two chats must not start two servers
 # Talk to Ollama directly: a system proxy (common on Windows) must not get localhost requests
 _local = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -141,6 +144,11 @@ def status(current_model):
 
 def start():
     """Start "ollama serve" only if nothing answers on localhost:11434."""
+    with _start_lock:
+        return _start()
+
+
+def _start():
     global _started
     if server_version() is not None:
         return "Ollama is already running."
@@ -152,14 +160,17 @@ def start():
     else:
         kwargs["start_new_session"] = True
     _started = subprocess.Popen([program, "serve"], **kwargs)
-    import time
-    for _ in range(40):
+    for _ in range(120):                              # GPU set-up can take a while
         time.sleep(0.25)
         if server_version() is not None:
             return "Ollama started."
         if _started.poll() is not None:
             break
     raise RuntimeError("Ollama did not start. See logs/ollama.log in the data folder.")
+
+
+def is_installed():
+    return binaries.find_tool("ollama") is not None
 
 
 def stop_if_started_by_us():
