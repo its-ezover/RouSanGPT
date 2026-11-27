@@ -1,8 +1,9 @@
 """Device and security icons for the pictures and animations: PCs, servers,
 routers, switches, clouds, phones, people, keys, locks and more, drawn with
-Pillow (no image files), in a light and a dark colour set, in two looks chosen in
-Settings: Classic (flat) or Frutiger Aero (bright sky-blue and green colours, a
-light gradient, a glass highlight on the upper half and a soft shadow, see _aero).
+Pillow (no image files), in a light and a dark colour set, in the look chosen in
+Settings: Classic (flat), Frutiger Aero (glass highlight and soft shadow, _aero),
+Cybercore (dark bodies with neon lines that glow, _neon) or Y2K (candy pastels,
+gloss and a sparkle, _candy).
 
     icon_kind("Router 1") -> "router"      (picks the icon from a name)
     paste_icon(d, "router", cx, cy, 90, "dark")
@@ -470,22 +471,67 @@ def _aero(img, theme):
     return out
 
 
-def icon_image(kind, size, theme="dark", aero=None):
+# Cybercore: dark bodies, neon lines and screens
+CYBER_COLORS = {
+    "dark": dict(line="#00f0ff", body="#0d0820", screen="#ff00e5", accent="#00f0ff", second="#b026ff",
+                 warn="#ffb300", bad="#ff2a6d", good="#39ff14", paper="#e8f7ff", dim="#3a2f66"),
+    "light": dict(line="#7a00c8", body="#f3edff", screen="#c400ff", accent="#0090b0", second="#7a00c8",
+                  warn="#e06000", bad="#e0005a", good="#00a650", paper="#ffffff", dim="#b8a8e6"),
+}
+# Y2K: candy pastels with a purple outline
+CANDY_COLORS = {
+    "dark": dict(line="#ffd6f6", body="#3a1a5a", screen="#7ad7ff", accent="#ff7ad9", second="#a99bff",
+                 warn="#ffc46b", bad="#ff7096", good="#5ef0c8", paper="#ffffff", dim="#7a5a9a"),
+    "light": dict(line="#8a3fb0", body="#fff0fb", screen="#8fd3ff", accent="#ff6fd0", second="#a99bff",
+                  warn="#ffb347", bad="#ff5c8a", good="#4fd1b5", paper="#ffffff", dim="#d9b8ea"),
+}
+LOOK_COLORS = {"classic": FLAT_COLORS, "aero": COLORS, "cybercore": CYBER_COLORS, "y2k": CANDY_COLORS}
+
+
+def _neon(img, theme):
+    """Cybercore: the icon's own colours blurred into a glow around it."""
+    big = img.width
+    glow = img.filter(ImageFilter.GaussianBlur(big * 0.035))
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    out.alpha_composite(glow)
+    out.alpha_composite(glow if theme == "dark" else Image.new("RGBA", img.size, (0, 0, 0, 0)))
+    out.alpha_composite(img)
+    return out
+
+
+def _candy(img, theme):
+    """Y2K: the Aero gloss, and a sparkle in the top right corner."""
+    out = _aero(img, theme)
+    big = out.width
+    d = ImageDraw.Draw(out)
+    x, y, r = big * .86, big * .14, big * .1
+    t = r * 0.22
+    d.polygon([(x, y - r), (x + t, y - t), (x + r, y), (x + t, y + t), (x, y + r), (x - t, y + t), (x - r, y),
+               (x - t, y - t)], fill=(255, 255, 255, 235))
+    d.ellipse([x - t * 1.2, y - t * 1.2, x + t * 1.2, y + t * 1.2], fill=(255, 150, 225, 255))
+    return out
+
+
+FINISH = {"classic": None, "aero": _aero, "cybercore": _neon, "y2k": _candy}
+
+
+def icon_image(kind, size, theme="dark", look=None):
     """A smooth RGBA picture of the icon, size x size pixels, in the look chosen in
-    Settings (or the one given: aero=True or False)."""
+    Settings (or the one given)."""
+    look = look or settings.look()
     return _icon_image(kind, int(size), "dark" if theme == "dark" else "light",
-                       settings.aero() if aero is None else bool(aero))
+                       look if look in LOOK_COLORS else "classic")
 
 
-@lru_cache(maxsize=1024)
-def _icon_image(kind, size, theme, aero):
+@lru_cache(maxsize=2048)
+def _icon_image(kind, size, theme, look):
     draw = ICONS.get(kind, _pc)
     big = size * SCALE
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    draw(d, 0, 0, big, (COLORS if aero else FLAT_COLORS)[theme], max(2, big // 26))
-    if aero:
-        img = _aero(img, theme)
+    draw(d, 0, 0, big, LOOK_COLORS[look][theme], max(2, big // 26))
+    if FINISH[look]:
+        img = FINISH[look](img, theme)
     return img.resize((size, size), Image.Resampling.LANCZOS)
 
 
@@ -500,7 +546,7 @@ def device(d, name, cx, cy, size, theme="dark", label_color=None, label_size=22,
     from animation_tools import font
     paste_icon(d, kind or icon_kind(name), cx, cy, size, theme)
     y = cy + size / 2 + label_size * 0.7
-    color = label_color or (COLORS if settings.aero() else FLAT_COLORS)["dark" if theme == "dark" else "light"]["line"]
+    color = label_color or LOOK_COLORS[settings.look()]["dark" if theme == "dark" else "light"]["line"]
     d.text((cx, y), str(name), font=font(label_size, True), fill=color, anchor="mm")
     return y
 
@@ -509,10 +555,10 @@ def icon_file(kind, theme="light", size=96):
     """The icon as a PNG file (for Graphviz and matplotlib). Kept in diagrams/_icons."""
     folder = Path("diagrams") / "_icons"
     folder.mkdir(parents=True, exist_ok=True)
-    aero = settings.aero()
-    path = folder / f"{kind}_{theme}_{size}{'_aero' if aero else ''}.png"
+    look = settings.look()
+    path = folder / f"{kind}_{theme}_{size}_{look}.png"
     if not path.exists():
-        icon_image(kind, size, theme, aero).save(path)
+        icon_image(kind, size, theme, look).save(path)
     return path.resolve()
 
 

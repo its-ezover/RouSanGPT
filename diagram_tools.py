@@ -6,6 +6,7 @@ from pathlib import Path
 
 import binaries
 import device_icons
+import looks
 
 
 def _clean_name(name):
@@ -59,7 +60,7 @@ def _with_icons(dot_code):
             kind = "router"
         if kind is None:
             continue
-        icon = str(device_icons.icon_file(kind, "light", 64)).replace('"', "")
+        icon = str(device_icons.icon_file(kind, looks.diagram()["icons"], 64)).replace('"', "")
         lines.append(f'"{name}" [shape=plaintext, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">'
                      f'<TR><TD><IMG SRC="{icon}"/></TD></TR><TR><TD>{html.escape(label)}</TD></TR></TABLE>>];')
     if not lines:
@@ -96,7 +97,7 @@ def draw_topology(dot_code: str, name: str) -> dict:
         dot_file.write_text(code, encoding="utf-8")
         try:
             result = subprocess.run(
-                [dot, "-Tpng", str(dot_file), "-o", str(png_file)],
+                [dot, "-Tpng", *looks.graphviz_args(), str(dot_file), "-o", str(png_file)],
                 capture_output=True, text=True, timeout=30, **binaries.NO_WINDOW,
             )
         except (OSError, subprocess.TimeoutExpired) as e:
@@ -137,28 +138,30 @@ def draw_sequence_diagram(title: str, participants: list[str],
     import matplotlib.pyplot as plt
 
     n = len(steps)
+    c = looks.diagram()                                  # the colours of the chosen look
     fig, ax = plt.subplots(figsize=(3 + 2.5 * len(participants), 1.8 + 0.8 * n))
+    fig.set_facecolor(c["bg"])
     bottom = -(n + 1)
     from matplotlib.offsetbox import AnnotationBbox, OffsetImage
     for p, x in xs.items():
-        ax.text(x, 0.15, p, ha="center", va="bottom", fontsize=12, fontweight="bold")
-        icon = device_icons.icon_image(device_icons.icon_kind(p), 96, "light")
+        ax.text(x, 0.15, p, ha="center", va="bottom", fontsize=12, fontweight="bold", color=c["text"])
+        icon = device_icons.icon_image(device_icons.icon_kind(p), 96, c["icons"])
         ax.add_artist(AnnotationBbox(OffsetImage(icon, zoom=0.5), (x, 0.95), frameon=False))
-        ax.plot([x, x], [0, bottom], color="gray", linestyle="--", linewidth=1)
+        ax.plot([x, x], [0, bottom], color=c["line"], linestyle="--", linewidth=1)
     for i, (x1, x2, label) in enumerate(steps, start=1):
         y = -i
         ax.annotate("", xy=(x2, y), xytext=(x1, y),
-                    arrowprops=dict(arrowstyle="->", lw=1.5))
+                    arrowprops=dict(arrowstyle="->", lw=1.5, color=c["arrow"]))
         ax.text((x1 + x2) / 2, y + 0.12, f"{i}. {label}", ha="center",
-                va="bottom", fontsize=10)
-    ax.set_title(title)
+                va="bottom", fontsize=10, color=c["text"])
+    ax.set_title(title, color=c["text"])
     ax.axis("off")
     ax.set_xlim(-0.6, len(participants) - 0.4)
     ax.set_ylim(bottom - 0.3, 1.5)
 
     Path("diagrams").mkdir(exist_ok=True)
     png_file = Path("diagrams") / f"{_clean_name(name)}.png"
-    fig.savefig(png_file, dpi=150, bbox_inches="tight")
+    fig.savefig(png_file, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
     _open_image(png_file)
     return {"saved_to": str(png_file), "message": "Diagram drawn and shown to the student."}
@@ -210,21 +213,23 @@ def draw_packet_header(title: str, fields: list[str], name: str) -> dict:
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
+    c = looks.diagram()                                  # the colours of the chosen look
     fig, ax = plt.subplots(figsize=(11, 1.4 + 0.75 * total_rows))
+    fig.set_facecolor(c["bg"])
     for i in range(32):                      # the bit ruler on top
-        ax.text(i + 0.5, 0.12, str(i), ha="center", va="bottom", fontsize=6)
+        ax.text(i + 0.5, 0.12, str(i), ha="center", va="bottom", fontsize=6, color=c["text"])
     for label, x, w, r, h in items:
-        ax.add_patch(Rectangle((x, -(r + h)), w, h, fc="#dbeafe", ec="black", lw=1.2))
+        ax.add_patch(Rectangle((x, -(r + h)), w, h, fc=c["box"], ec=c["edge"], lw=1.2))
         ax.text(x + w / 2, -(r + h / 2), textwrap.fill(label, width=max(5, w)),
-                ha="center", va="center", fontsize=8)
+                ha="center", va="center", fontsize=8, color=c["text"])
     ax.set_xlim(-0.2, 32.2)
     ax.set_ylim(-total_rows - 0.2, 1.0)
     ax.axis("off")
-    ax.set_title(title)
+    ax.set_title(title, color=c["text"])
 
     Path("diagrams").mkdir(exist_ok=True)
     png_file = Path("diagrams") / f"{_clean_name(name)}.png"
-    fig.savefig(png_file, dpi=150, bbox_inches="tight")
+    fig.savefig(png_file, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
     _open_image(png_file)
     return {"saved_to": str(png_file), "message": "Header diagram drawn and shown to the student."}

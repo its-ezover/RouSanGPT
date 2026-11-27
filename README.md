@@ -68,11 +68,20 @@ is built only with free tools.
   Bob, Trudy the attacker, key, lock, shield, document, envelope, certificate
   authority, globe, home, building, gear), chosen from each device's name, in
   topologies, sequence diagrams, every animation and the explainers.
-- **Two looks (Settings > Look):** *Classic* (flat) or *Frutiger Aero*: glass
-  panels over a sky gradient, glossy buttons, message bubbles and page icons, a
-  glass-orb Send button, glossy device icons, and a sky behind every picture,
-  animation and video, in the light and the dark theme. Pictures and videos
-  already made keep the look they were made with.
+- **Four looks (Settings > Look),** each for the whole app (the page and its
+  icons, device icons, pictures, diagrams, animations and video slides), in the
+  light and the dark theme:
+  - *Classic*: flat.
+  - *Frutiger Aero*: glass panels over a sky, glossy buttons, bubbles and icons.
+  - *Cybercore*: neon on near-black, a grid and scanlines, HUD panels with cut
+    corners, glitch titles, a monospace font and glowing neon icons.
+  - *Y2K*: holographic pastels with sparkles, chrome pill buttons, candy bubbles,
+    rainbow headings and candy icons.
+  Pictures and videos already made keep the look they were made with.
+- **Math that looks like math:** 2^k * q is shown with a raised k and a
+  multiplication dot, a^(q*2^j) with a raised q·2^j, x_i with a lowered i, -> as an
+  arrow, in the answers and in the pictures; read-aloud says "2 to the power k
+  times q".
 - **Friendly answers:** the tutor uses a few fitting emojis (💡 tips, ⚠️ common
   mistakes, ✅ correct, 🔐 encryption...); read-aloud skips them.
 - **Animations:** message exchanges, store-and-forward packet flow, sliding window
@@ -591,7 +600,9 @@ with the install command instead of a crash.
 | `explainers.py`, `visual_kit.py` | the slides' figures as pictures and animations: the two tools, the registry and the shared drawing code |
 | `net_visuals.py`, `crypto_visuals.py` | the networking and cryptography figures |
 | `device_icons.py` | the device and security icons, and choosing one from a name |
-| `ui_icons.py`, `web/aero/` | the page's icons for the Frutiger Aero look (`python ui_icons.py` makes them again) |
+| `looks.py` | the looks: colours, backgrounds, titles, boxes and slide panels of each |
+| `rich_text.py` | math in the pictures: raised powers, lowered indices, multiplication dots |
+| `ui_icons.py`, `web/looks/` | the page's icons for the Aero, Cybercore and Y2K looks (`python ui_icons.py` makes them again) |
 | `video_tools.py` | narrated video generator |
 | `quiz.py` | quiz generator and answer checker |
 | `install.sh`, `uninstall.sh` | Linux installer |

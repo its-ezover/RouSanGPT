@@ -428,6 +428,10 @@ def clean_for_speech(text):
     """Remove the formatting symbols so the voice does not read them out."""
     text = re.sub(r"```.*?```", " ", text, flags=re.S)
     text = re.sub(r"https?://\S+", " ", text)
+    # math, read the way it is said: 2^k * q -> 2 to the power k times q
+    text = re.sub(r"(?<=[\w)])(?: \* |\*)(?=[\w(])", " times ", text)
+    text = re.sub(r"\^", " to the power ", text)
+    text = text.replace("->", " to ")
     text = re.sub(r"[*_`#>|]", "", text)
     # emojis are for the eyes: a voice would read them out as words ("light bulb")
     text = re.sub("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]", "", text)

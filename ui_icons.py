@@ -1,8 +1,10 @@
 """The page's own icons (Settings, Materials, Tools, search, theme, microphone,
-Listen, Copy...) in the glossy Frutiger Aero style of device_icons.py.
+Listen, Copy...) for the Frutiger Aero, Cybercore and Y2K looks, with the same
+finish as device_icons.py (gloss, neon glow, candy sparkle). The Classic look keeps
+the page's line icons.
 
-They are saved as PNG files in web/aero/, which the page shows. Run this file to
-make them again after changing a drawing:
+They are saved as PNG files in web/looks/<look>/, which the page shows. Run this
+file to make them again after changing a drawing:
 
     python ui_icons.py
 """
@@ -12,12 +14,24 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 import device_icons
-from device_icons import SCALE, _aero, _arrowhead, _key, _lock
+from device_icons import SCALE, _aero, _arrowhead, _candy, _key, _lock, _neon
 
-# one set for both themes: bright colours with a mid-blue outline that shows on both
-P = dict(line="#245a86", body="#eaf4fc", screen="#2a9fe6", accent="#2a9fe6", second="#7b5ce0", warn="#f39a2b",
-         bad="#e0443a", good="#43b649", paper="#ffffff", dim="#9db5c9", gold="#f6c431", silver="#c9d6e2")
-OUT = Path(__file__).resolve().parent / "web" / "aero"
+# one set per look, for both themes: colours with an outline that shows on both
+PALETTES = {
+    "aero": dict(line="#245a86", body="#eaf4fc", screen="#2a9fe6", accent="#2a9fe6", second="#7b5ce0",
+                 warn="#f39a2b", bad="#e0443a", good="#43b649", paper="#ffffff", dim="#9db5c9",
+                 gold="#f6c431", silver="#c9d6e2"),
+    "cybercore": dict(line="#00e5ff", body="#120a2a", screen="#ff2bd6", accent="#00e5ff", second="#b026ff",
+                      warn="#ffb300", bad="#ff2a6d", good="#39ff14", paper="#e8f7ff", dim="#5a4f8a",
+                      gold="#ffe600", silver="#2a2050"),
+    "y2k": dict(line="#8a3fb0", body="#fff0fb", screen="#8fd3ff", accent="#ff6fd0", second="#a99bff",
+                warn="#ffb347", bad="#ff5c8a", good="#4fd1b5", paper="#ffffff", dim="#d9b8ea",
+                gold="#ffd84d", silver="#efe4fa"),
+}
+FINISH = {"aero": lambda img: _aero(img, "light"), "cybercore": lambda img: _neon(img, "dark"),
+          "y2k": lambda img: _candy(img, "light")}
+P = PALETTES["aero"]
+OUT = Path(__file__).resolve().parent / "web" / "looks"
 
 
 def _gear(d, x, y, s, c, w):
@@ -229,18 +243,21 @@ ICONS = {
 }
 
 
-def render(name, size=96):
+def render(name, look="aero", size=96):
     big = size * SCALE
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ICONS[name](ImageDraw.Draw(img), 0, 0, big, P, max(2, big // 26))
-    return _aero(img, "light").resize((size, size), Image.Resampling.LANCZOS)
+    ICONS[name](ImageDraw.Draw(img), 0, 0, big, PALETTES[look], max(2, big // 26))
+    return FINISH[look](img).resize((size, size), Image.Resampling.LANCZOS)
 
 
 def export(folder=OUT, size=96):
-    folder.mkdir(parents=True, exist_ok=True)
-    for name in ICONS:
-        render(name, size).save(folder / f"{name}.png", optimize=True)
-    return sorted(p.name for p in folder.glob("*.png"))
+    made = []
+    for look in PALETTES:
+        (folder / look).mkdir(parents=True, exist_ok=True)
+        for name in ICONS:
+            render(name, look, size).save(folder / look / f"{name}.png", optimize=True)
+            made.append(f"{look}/{name}.png")
+    return made
 
 
 if __name__ == "__main__":

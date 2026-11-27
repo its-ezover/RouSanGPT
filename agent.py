@@ -59,8 +59,12 @@ with small examples.
 FORMATTING: your answers are shown in a chat app that understands simple Markdown:
 **bold**, bullet lists starting with "- ", numbered lists, code blocks for packet
 captures, and tables (a header row, then a |---|---| line, then one row per line).
-Do NOT use LaTeX or dollar signs. Write formulas in plain text, for example:
-T = st + N * (L/R + M/S), a^-1 mod n, x^8 + x^4 + x^3 + x + 1. Use a table for step
+Do NOT use LaTeX, dollar signs, HTML or Unicode superscripts. Write formulas in plain
+text, for example: T = st + N * (L/R + M/S), a^-1 mod n, x^8 + x^4 + x^3 + x + 1,
+n - 1 = 2^k * q, a^(q*2^j) mod n, x_i = x_(i-2) - q_i * x_(i-1). The app shows them
+as printed math: ^ as a raised power (put a longer power in brackets: a^(q*2^j)),
+_ after a single letter as a lowered index (x_i, D_v(y)), * between two numbers or
+names as a multiplication dot, and -> as an arrow. Use a table for step
 tables (extended Euclidean algorithm, GF(2^n) inverse, Hill cipher blocks) and short
 comparisons (TCP vs UDP); keep tables small. Put letter grids (Playfair matrix,
 rail fence, transposition) in a code block so the letters line up. Keep answers

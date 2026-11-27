@@ -17,60 +17,62 @@ the course's calculators, never from the AI.
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import ImageDraw
 
 import animation_tools as at
 import device_icons
 import diagram_tools
-import settings
+import looks
+import rich_text as rich
 
 W, H = at.W, at.H
 
-LIGHT = dict(bg="#ffffff", text="#0f172a", muted="#64748b", line="#cbd5e1", head="#e0f2fe",
-             accent="#0284c7", mark="#fde68a", cell="#f8fafc", good="#15803d", bad="#b91c1c",
-             on_accent="#ffffff", second="#7c3aed", warn="#c2410c")
-DARK = dict(bg=at.BG, text="#e2e8f0", muted="#94a3b8", line="#334155", head="#1e293b",
-            accent="#38bdf8", mark="#854d0e", cell="#111827", good="#4ade80", bad="#f87171",
-            on_accent="#062030", second="#a78bfa", warn="#fb923c")
+# The two colour sets every drawing uses (th["accent"], th is DARK...). canvas() fills
+# them with the chosen look's colours (looks.PICTURE) before each picture or frame.
+LIGHT = dict(looks.PICTURE["classic"]["light"])
+DARK = dict(looks.PICTURE["classic"]["dark"])
+
+
+def use_look(look=None):
+    look = look or looks.current()
+    LIGHT.clear()
+    LIGHT.update(looks.picture_palette("light", look))
+    DARK.clear()
+    DARK.update(looks.picture_palette("dark", look))
+    return look
 MAX_ROWS = 14
 
 
 # ---------- drawing helpers ----------
 
 def canvas(title, th):
-    """A frame: in the Aero look a sky behind it and a glossy title bar, in the
-    Classic look plain white with a blue bar (Settings > Look)."""
-    if th is DARK:
-        return at.new_frame(title)
-    if settings.aero():
-        img = at.aero_background(light=True).copy()
-        d = ImageDraw.Draw(img)
-        at.frame_title(d, title, light=True)
-        return img, d
-    img = Image.new("RGB", (W, H), th["bg"])
+    """A frame in the look chosen in Settings: its colours, background and title."""
+    look = use_look()
+    light = th is LIGHT
+    img = looks.background(look, light).copy()
     d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, W, 12], fill=th["accent"])
-    d.text((80, 55), title[:48], font=at.font(42, True), fill=th["text"])
+    looks.title(d, title, look, light)
     return img, d
 
 
 def box(d, x, y, w, h, th, fill=None, outline=None, width=2, radius=8):
-    """A glossy box (a lighter upper half and a highlight, the Aero look)."""
+    """A box in the look's style (flat, glossy, neon or candy)."""
     at.gloss_rect(d, [x, y, x + w, y + h], radius, fill or th["cell"], outline or th["line"], width,
                   light=th is LIGHT)
 
 
 def center(d, x, y, text, size, th, color=None, bold=False):
-    d.text((x, y), str(text), font=at.font(size, bold), fill=color or th["text"], anchor="mm")
+    """Centred text; math such as 2^k * q is drawn as real math (see rich_text.py)."""
+    rich.draw(d, (x, y), text, size, color or th["text"], bold, "mm")
 
 
 def left(d, x, y, text, size, th, color=None, bold=False):
-    d.text((x, y), str(text), font=at.font(size, bold), fill=color or th["text"], anchor="lm")
+    rich.draw(d, (x, y), text, size, color or th["text"], bold, "lm")
 
 
 def fit_line(d, x, y, text, th, size=30, color=None, bold=True, max_w=W - 160):
     """One centred line, made smaller until it fits."""
-    while size > 14 and d.textlength(text, font=at.font(size, bold)) > max_w:
+    while size > 14 and rich.width(d, text, size, bold) > max_w:
         size -= 1
     center(d, x, y, text, size, th, color, bold)
 
@@ -98,9 +100,8 @@ def _fit_table(d, columns, rows, max_w, row_h):
     size = int(min(30, row_h * 0.52))
     widths = []
     while size >= 11:
-        f, fb = at.font(size), at.font(size, True)
         pad = size * 0.8
-        widths = [max([d.textlength(h, font=fb)] + [d.textlength(r[c], font=f) for r in rows]) + 2 * pad
+        widths = [max([rich.width(d, h, size, True)] + [rich.width(d, r[c], size) for r in rows]) + 2 * pad
                   for c, h in enumerate(columns)]
         if sum(widths) <= max_w:
             break
@@ -212,9 +213,10 @@ def _corner_icon(d, visual, theme):
 
 
 def save_still(visual, name):
-    img, d = canvas(visual["title"], LIGHT)
-    _corner_icon(d, visual, "light")
-    visual["draw"](d, LIGHT, None)
+    th = DARK if looks.still_theme() == "dark" else LIGHT      # Cybercore pictures are dark
+    img, d = canvas(visual["title"], th)
+    _corner_icon(d, visual, "dark" if th is DARK else "light")
+    visual["draw"](d, th, None)
     Path("diagrams").mkdir(exist_ok=True)
     png = Path("diagrams") / f"{diagram_tools._clean_name(name)}.png"
     img.save(png)

@@ -477,5 +477,53 @@ server.change_settings(server.SettingsRequest(look="classic"))
 video_tools.draw_slide("Title", ["one", "two"], 1, 2, slide)
 check("video slides follow the look", slide.read_bytes() != aero_slide and not settings.aero())
 
+# ---- Cybercore and Y2K: every part follows the look ----
+import diagram_tools as dt2  # noqa: E402
+import looks  # noqa: E402
+
+drawn = {}
+for look_name in ("cybercore", "y2k"):
+    server.change_settings(server.SettingsRequest(look=look_name))
+    broken = []
+    for kind_name in visual_kit.KINDS:
+        try:
+            visual = visual_kit.build(kind_name, [])
+            th = visual_kit.DARK if looks.still_theme() == "dark" else visual_kit.LIGHT
+            img, d = visual_kit.canvas(visual["title"], th)
+            visual["draw"](d, th, None)
+            for step in range(-1, min(visual["steps"], 4)):
+                img, d = visual_kit.canvas(visual["title"], visual_kit.DARK)
+                visual["draw"](d, visual_kit.DARK, step)
+        except Exception as e:
+            broken.append(f"{kind_name}: {e}")
+    check(f"every explainer kind draws in the {look_name} look {broken}", not broken)
+    video_tools.draw_slide("n - 1 = 2^k * q", ["a^(q*2^j) mod n"], 1, 2, slide)
+    drawn[look_name] = (slide.read_bytes(), device_icons.icon_image("switch", 64, "dark").tobytes(),
+                        animation_tools.new_frame("t")[0].getpixel((640, 600)), dt2.draw_sequence_diagram(
+                            "t", ["Alice", "Bob"], ["Alice -> Bob: hi"], "seq_" + look_name).get("saved_to"))
+check("Cybercore and Y2K slides, icons and frames differ",
+      drawn["cybercore"][0] != drawn["y2k"][0] and drawn["cybercore"][1] != drawn["y2k"][1]
+      and drawn["cybercore"][2] != drawn["y2k"][2])
+check("the sequence diagrams are drawn in both looks", all(v[3] for v in drawn.values()))
+check("the Graphviz colours follow the look", "-Gbgcolor=#05010d" in looks.graphviz_args("cybercore")
+      and looks.graphviz_args("classic") == [])
+server.change_settings(server.SettingsRequest(look="classic"))
+check("back to Classic", not settings.aero() and settings.look() == "classic")
+
+# ---- math shown as math ----
+import rich_text  # noqa: E402
+
+check("pictures: 2^6 * 27 becomes 2, a raised 6, then · 27",
+      rich_text.parts("2^6 * 27") == [("2", 0), ("6", 1), (" · 27", 0)])
+check("pictures: a nested power a^(q*2^j) and indices x_(i-2)",
+      rich_text.parts("a^(q*2^j)") == [("a", 0), ("q·2ʲ", 1)]
+      and rich_text.parts("x_(i-2)") == [("x", 0), ("i-2", -1)])
+check("pictures: file names, *italics* and the *** of an address range stay as they are",
+      rich_text.parts("Ch1_suggested_solution.pdf") == [("Ch1_suggested_solution.pdf", 0)]
+      and rich_text.parts("00010*** ****") == [("00010*** ****", 0)]
+      and rich_text.parts("use *this* now") == [("use *this* now", 0)])
+check("titles: 2^k * q becomes 2ᵏ · q", rich_text.unicode("n - 1 = 2^k * q") == "n - 1 = 2ᵏ · q")
+check("read-aloud says the math", server.clean_for_speech("2^k * q") == "2 to the power k times q")
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

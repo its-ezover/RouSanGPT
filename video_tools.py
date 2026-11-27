@@ -7,13 +7,15 @@ from pathlib import Path
 from typing import Literal
 
 from google.genai import types
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
 
 import animation_tools
 import binaries
 import diagram_tools
 import explainers
+import looks
+import rich_text as rich
 import gemini_client
 import settings
 import tts
@@ -227,24 +229,6 @@ def render_animation_clip(frame_fn, natural, narration_seconds, out_path):
     animation_tools.render_video(lambda t: frame_fn(t * speed), duration, out_path)
 
 
-def _glass(img, box, radius, fill=(255, 255, 255, 22), shadow=110):
-    """A Frutiger Aero glass panel: a soft shadow, a see-through panel and a shine."""
-    x0, y0, x1, y1 = box
-    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(layer).rounded_rectangle([x0, y0 + 10, x1, y1 + 10], radius=radius, fill=(0, 10, 25, shadow))
-    out = img.convert("RGBA")
-    out.alpha_composite(layer.filter(ImageFilter.GaussianBlur(14)))
-    panel = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(panel).rounded_rectangle(box, radius=radius, fill=fill, outline=(160, 220, 255, 70), width=2)
-    out.alpha_composite(panel)
-    # the shine goes on its own layer: drawing it on the panel would replace the panel's pixels
-    shine = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(shine).rounded_rectangle([x0 + 2, y0 + 2, x1 - 2, y0 + (y1 - y0) * 0.42], radius=radius,
-                                            fill=(255, 255, 255, 16), corners=(True, True, False, False))
-    out.alpha_composite(shine)
-    return out.convert("RGB")
-
-
 def _draw_slide_classic(title, bullets, number, total, out_path, diagram_png=None):
     img = Image.new("RGB", (W, H), "#0f172a")
     d = ImageDraw.Draw(img)
@@ -256,7 +240,7 @@ def _draw_slide_classic(title, bullets, number, total, out_path, diagram_png=Non
 
     d.rectangle([0, 0, W, 12], fill="#38bdf8")
     y = 60 if diagram_png else 70
-    for line in textwrap.wrap(title, width=34 if diagram_png else 30)[:2]:
+    for line in textwrap.wrap(rich.unicode(title), width=34 if diagram_png else 30)[:2]:
         d.text((80, y), line, font=f_title, fill="white")
         y += 58 if diagram_png else 66
 
@@ -272,7 +256,7 @@ def _draw_slide_classic(title, bullets, number, total, out_path, diagram_png=Non
         y += 30
         for bullet in bullets[:5]:
             d.ellipse([80, y + 14, 94, y + 28], fill="#38bdf8")
-            for line in textwrap.wrap(bullet, width=46)[:2]:
+            for line in textwrap.wrap(rich.unicode(bullet), width=46)[:2]:
                 d.text((115, y), line, font=f_body, fill="#e2e8f0")
                 y += 48
             y += 18
@@ -283,34 +267,38 @@ def _draw_slide_classic(title, bullets, number, total, out_path, diagram_png=Non
 
 
 def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
-    """A slide in the look chosen in Settings: Classic (flat) or Frutiger Aero."""
-    draw = _draw_slide_aero if settings.aero() else _draw_slide_classic
-    draw(title, bullets, number, total, out_path, diagram_png)
+    """A slide in the look chosen in Settings (Classic, Frutiger Aero, Cybercore or Y2K)."""
+    look = settings.look()
+    if look == "classic":
+        _draw_slide_classic(title, bullets, number, total, out_path, diagram_png)
+    else:
+        _draw_slide_styled(title, bullets, number, total, out_path, diagram_png, look)
 
 
-def _draw_slide_aero(title, bullets, number, total, out_path, diagram_png=None):
-    img = animation_tools.aero_background().copy()
+def _draw_slide_styled(title, bullets, number, total, out_path, diagram_png=None, look="aero"):
+    """A slide in the Aero, Cybercore or Y2K look: the look's background, a panel
+    behind the bullets (or a card around the picture), its bullets and title effect."""
+    img = looks.background(look, False).copy()
     if diagram_png:
-        img = _glass(img, [80, 190, 1200, 655], 18, fill=(255, 255, 255, 255), shadow=140)
+        img = looks.panel(img, [80, 190, 1200, 655], look, card=True)
     elif bullets:
-        img = _glass(img, [60, 215, 1220, 640], 24)
+        img = looks.panel(img, [60, 215, 1220, 640], look)
     d = ImageDraw.Draw(img)
     regular = animation_tools.font_path()
     bold = animation_tools.font_path(bold=True)
-    f_title = ImageFont.truetype(bold, 46 if diagram_png else 54)
-    f_body = ImageFont.truetype(regular, 36)
+    f_title = (animation_tools.mono_font(42 if diagram_png else 50, True) if look == "cybercore"
+               else ImageFont.truetype(bold, 46 if diagram_png else 54))
     f_small = ImageFont.truetype(regular, 22)
 
-    d.rectangle([0, 0, W, 12], fill="#3fb2f5")
-    d.rectangle([0, 0, W, 4], fill="#bdeaff")
+    looks.title(d, "", look, False)                     # the look's top bar
     y = 60 if diagram_png else 70
-    for line in textwrap.wrap(title, width=34 if diagram_png else 30)[:2]:
-        d.text((82, y + 3), line, font=f_title, fill="#021627")      # a soft shadow
-        d.text((80, y), line, font=f_title, fill="white")
+    shown = rich.unicode(title)                         # 2^k * q -> 2ᵏ · q
+    shown = shown.upper() if look == "cybercore" else shown
+    for line in textwrap.wrap(shown, width=34 if diagram_png else 30)[:2]:
+        looks.title_text(d, (80, y), line, f_title, look, False)
         y += 58 if diagram_png else 66
 
     if diagram_png:
-        # the diagram on the white glass card drawn above
         pic = Image.open(diagram_png).convert("RGB")
         scale = min(1090 / pic.width, 435 / pic.height, 1.5)
         pic = pic.resize((max(1, int(pic.width * scale)), max(1, int(pic.height * scale))),
@@ -319,11 +307,9 @@ def _draw_slide_aero(title, bullets, number, total, out_path, diagram_png=None):
     else:
         y = max(y + 30, 245)
         for bullet in bullets[:5]:
-            # a glossy orb
-            d.ellipse([96, y + 11, 116, y + 31], fill="#1b93de", outline="#0b6db3")
-            d.ellipse([100, y + 13, 112, y + 21], fill="#9fe2ff")
+            looks.bullet(d, 106, y + 21, look)
             for line in textwrap.wrap(bullet, width=46)[:2]:
-                d.text((135, y), line, font=f_body, fill="#e7f5ff")
+                rich.draw(d, (135, y + 21), line, 36, looks.slide_text_color(look), anchor="lm")
                 y += 48
             y += 18
 
