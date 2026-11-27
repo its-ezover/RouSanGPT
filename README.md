@@ -570,9 +570,14 @@ with the install command instead of a crash.
 ## Tests
 GitHub runs these on every push and every Monday (so a new package release that
 breaks the app shows up early):
+- **ruff:** looks for real mistakes in the code (a misspelled name, a missing or
+  unused import). Only those rules are on, not style.
 - **`tests/test_backend.py`:** every chat has its own quiz, the counter of files
-  being added is safe with many threads, and the course search gives the same
-  pieces as asking the database directly.
+  being added is safe with many threads, the course search gives the same pieces
+  as asking the database directly, the calculators and crypto tools give the
+  textbook answers, and every tool (built-in and formula tools) can be given to
+  Gemini and to Ollama, with no two tools sharing a name. A formula tool saved
+  before a built-in tool took its name is turned off instead of breaking every chat.
 - **`tests/ui_test.py`:** the web page in a real browser (Chromium), in the light
   and the dark theme: drag and drop, the drop overlay, skipped files, choose files,
   Remove, closing the panel while a file is added, a narrow window, a chat with a

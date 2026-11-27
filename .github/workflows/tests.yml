@@ -24,8 +24,13 @@ jobs:
       - name: Install the packages
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt playwright
+          python -m pip install -r requirements.txt playwright "ruff<1"
           python -m playwright install --with-deps chromium
+
+      # only the rules that find real mistakes (a misspelled name, a missing or unused
+      # import), not style: the code passes them, so any new failure is worth a look
+      - name: Mistakes in the code (ruff)
+        run: ruff check --select F --output-format github .
 
       - name: Inner parts
         run: python tests/test_backend.py

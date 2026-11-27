@@ -190,7 +190,19 @@ TOOL_MAP = {}
 
 
 def all_tools():
-    return BASE_TOOLS + formula_tools.load_tools()
+    """The built-in tools plus the formula tools. A formula tool whose name is already
+    taken (for example one saved before a built-in tool with that name was added) is
+    skipped: Gemini refuses a request that declares two functions with one name, so a
+    clash would break every chat."""
+    tools, taken = list(BASE_TOOLS), {f.__name__ for f in BASE_TOOLS}
+    for tool in formula_tools.load_tools():
+        if tool.__name__ in taken:
+            print(f"  (skipping formula tool {tool.__name__}: a tool with that name already exists; "
+                  "delete it in the Tools panel and create it again with another name)")
+            continue
+        taken.add(tool.__name__)
+        tools.append(tool)
+    return tools
 
 
 def reload_tools():

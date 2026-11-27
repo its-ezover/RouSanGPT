@@ -342,11 +342,13 @@ def delete_material(name: str):
 
 @app.get("/api/tools")
 def list_tools():
-    custom = formula_tools.load_specs()
-    custom_names = {s["name"] for s in custom}
+    builtin_names = {f.__name__ for f in agent.BASE_TOOLS}
+    # a formula tool saved before a built-in tool got the same name is turned off
+    # (see agent.all_tools); the panel says so
+    custom = [{**s, "clash": s.get("name") in builtin_names} for s in formula_tools.load_specs()]
     builtin = [{"name": f.__name__,
                 "about": (f.__doc__ or "").strip().split("\n")[0]}
-               for f in agent.BASE_TOOLS if f.__name__ not in custom_names]
+               for f in agent.BASE_TOOLS]
     return {"custom": custom, "builtin": builtin}
 
 
@@ -355,8 +357,11 @@ def add_tool(req: FormulaToolRequest):
     raw = req.model_dump()
     name = req.name.strip()
     # only saved formula tools can be replaced, never the built-in ones
-    replace = req.replace and any(s.get("name") == name for s in formula_tools.load_specs())
-    taken = {f.__name__ for f in agent.all_tools()}
+    builtin_names = {f.__name__ for f in agent.BASE_TOOLS}
+    specs = formula_tools.load_specs()
+    replace = (req.replace and name not in builtin_names
+               and any(s.get("name") == name for s in specs))
+    taken = builtin_names | {s.get("name") for s in specs}
     try:
         spec = formula_tools.add_spec(raw, taken, replace=replace)
     except ValueError as e:

@@ -316,5 +316,64 @@ check("Dijkstra accepts names with hyphens",
 check("the calculator refuses answers with millions of digits",
       "error" in extra_tools.calculator("((10**999)**1000)**1000") and "error" in extra_tools.calculator("(9**999)**999"))
 
+# ---- every tool can be given to the AI (one broken tool breaks every chat) ----
+import collections  # noqa: E402
+
+import formula_tools  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
+from google import genai  # noqa: E402
+from google.genai import types as genai_types  # noqa: E402
+from ollama._utils import convert_function_to_tool  # noqa: E402
+
+
+def as_ai_tools(tools):
+    """Build the Gemini and the Ollama description of every tool; list what fails."""
+    fake = genai.Client(api_key="test-key-not-used")
+    broken = []
+    for f in tools:
+        try:
+            genai_types.FunctionDeclaration.from_callable(client=fake, callable=f)
+            convert_function_to_tool(f)
+        except Exception as e:
+            broken.append(f"{f.__name__}: {e}")
+    return broken
+
+
+# a formula tool made by a student, and one saved before a built-in tool took its name
+FORMULA = {"description": "Queuing delay from the queue length and the link rate.",
+           "params": [{"name": "packets", "description": "packets in the queue", "example": 3},
+                      {"name": "L", "description": "bits per packet", "example": 8000},
+                      {"name": "R", "description": "link rate in bits per second", "example": 1e6}],
+           "formula": "packets * L / R", "unit": "s"}
+formula_tools.add_spec({**FORMULA, "name": "queue_delay"}, set())
+formula_tools.add_spec({**FORMULA, "name": "caesar_cipher"}, set())   # as if saved before today
+tools_now = agent.all_tools()
+names = [f.__name__ for f in tools_now]
+check("every tool has a description for the AI",
+      all(f.__doc__ and f.__doc__.strip() for f in tools_now))
+check("no two tools share a name, even with an old formula tool called caesar_cipher",
+      not [n for n, c in collections.Counter(names).items() if c > 1])
+check("the built-in caesar_cipher wins, and the student's other formula tool still works",
+      dict(zip(names, tools_now))["caesar_cipher"].__module__ == "cipher_tools")
+check("the student's formula tool is offered to the AI", "queue_delay" in names)
+broken = as_ai_tools(tools_now)
+check(f"every tool converts for Gemini and for Ollama {broken}", not broken)
+listing = server.list_tools()
+check("the Tools panel marks the clashing formula tool as turned off",
+      [t["clash"] for t in listing["custom"] if t["name"] == "caesar_cipher"] == [True]
+      and [t["clash"] for t in listing["custom"] if t["name"] == "queue_delay"] == [False])
+check("the Tools panel still lists the built-in caesar_cipher",
+      any(t["name"] == "caesar_cipher" for t in listing["builtin"]))
+try:
+    server.add_tool(server.FormulaToolRequest(**FORMULA, name="caesar_cipher", replace=True))
+    saved_over_builtin = True
+except HTTPException:
+    saved_over_builtin = False
+check("a formula tool cannot be saved under a built-in tool's name, even when editing",
+      not saved_over_builtin)
+formula_tools.delete_spec("caesar_cipher")
+formula_tools.delete_spec("queue_delay")
+agent.reload_tools()
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

@@ -1406,9 +1406,14 @@ async function openTools(note) {
     info.appendChild(el("b", null, t.name));
     info.appendChild(document.createTextNode(" = " + t.formula + (t.unit ? "  [" + t.unit + "]" : "")));
     info.appendChild(el("div", "muted", t.description));
+    if (t.clash) {
+      info.appendChild(el("div", "err", "Turned off: a built-in tool now has the name " + t.name +
+        ". Delete this one and create it again with another name."));
+    }
     row.appendChild(info);
     const edit = el("button", "small", "Edit");
     edit.onclick = function () { startEdit(t); };
+    if (t.clash) edit.disabled = true;                // editing keeps the name, which is taken
     const del = el("button", "small danger", "Delete");
     del.onclick = async function () {
       if (!confirm("Delete the tool " + t.name + "?")) return;
