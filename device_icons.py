@@ -1,8 +1,8 @@
 """Device and security icons for the pictures and animations: PCs, servers,
 routers, switches, clouds, phones, people, keys, locks and more, drawn with
-Pillow (no image files), in a light and a dark colour set, in the glossy
-"Frutiger Aero" style: bright sky-blue and green colours, a light gradient, a
-glass highlight on the upper half and a soft shadow (see _aero).
+Pillow (no image files), in a light and a dark colour set, in two looks chosen in
+Settings: Classic (flat) or Frutiger Aero (bright sky-blue and green colours, a
+light gradient, a glass highlight on the upper half and a soft shadow, see _aero).
 
     icon_kind("Router 1") -> "router"      (picks the icon from a name)
     paste_icon(d, "router", cx, cy, 90, "dark")
@@ -17,8 +17,17 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
+import settings
+
 SCALE = 3
 
+# Classic (flat) colours
+FLAT_COLORS = {
+    "dark": dict(line="#e2e8f0", body="#1e293b", screen="#38bdf8", accent="#38bdf8", second="#a78bfa",
+                 warn="#fb923c", bad="#f87171", good="#4ade80", paper="#f8fafc", dim="#475569"),
+    "light": dict(line="#1e293b", body="#e2e8f0", screen="#0284c7", accent="#0284c7", second="#7c3aed",
+                  warn="#c2410c", bad="#b91c1c", good="#15803d", paper="#ffffff", dim="#94a3b8"),
+}
 # Frutiger Aero colours: sky blue, leaf green, warm orange, soft silver
 COLORS = {
     "dark": dict(line="#d6ecff", body="#34506b", screen="#3fb2f5", accent="#3fb2f5", second="#a48bf5",
@@ -461,16 +470,23 @@ def _aero(img, theme):
     return out
 
 
-@lru_cache(maxsize=512)
-def icon_image(kind, size, theme="dark"):
-    """A smooth RGBA picture of the icon, size x size pixels, in the Aero style."""
+def icon_image(kind, size, theme="dark", aero=None):
+    """A smooth RGBA picture of the icon, size x size pixels, in the look chosen in
+    Settings (or the one given: aero=True or False)."""
+    return _icon_image(kind, int(size), "dark" if theme == "dark" else "light",
+                       settings.aero() if aero is None else bool(aero))
+
+
+@lru_cache(maxsize=1024)
+def _icon_image(kind, size, theme, aero):
     draw = ICONS.get(kind, _pc)
-    big = int(size) * SCALE
+    big = size * SCALE
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    theme = "dark" if theme == "dark" else "light"
-    draw(d, 0, 0, big, COLORS[theme], max(2, big // 26))
-    return _aero(img, theme).resize((int(size), int(size)), Image.Resampling.LANCZOS)
+    draw(d, 0, 0, big, (COLORS if aero else FLAT_COLORS)[theme], max(2, big // 26))
+    if aero:
+        img = _aero(img, theme)
+    return img.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def paste_icon(d, kind, cx, cy, size, theme="dark"):
@@ -484,7 +500,7 @@ def device(d, name, cx, cy, size, theme="dark", label_color=None, label_size=22,
     from animation_tools import font
     paste_icon(d, kind or icon_kind(name), cx, cy, size, theme)
     y = cy + size / 2 + label_size * 0.7
-    color = label_color or COLORS["dark" if theme == "dark" else "light"]["line"]
+    color = label_color or (COLORS if settings.aero() else FLAT_COLORS)["dark" if theme == "dark" else "light"]["line"]
     d.text((cx, y), str(name), font=font(label_size, True), fill=color, anchor="mm")
     return y
 
@@ -493,9 +509,10 @@ def icon_file(kind, theme="light", size=96):
     """The icon as a PNG file (for Graphviz and matplotlib). Kept in diagrams/_icons."""
     folder = Path("diagrams") / "_icons"
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{kind}_{theme}_{size}.png"
+    aero = settings.aero()
+    path = folder / f"{kind}_{theme}_{size}{'_aero' if aero else ''}.png"
     if not path.exists():
-        icon_image(kind, size, theme).save(path)
+        icon_image(kind, size, theme, aero).save(path)
     return path.resolve()
 
 

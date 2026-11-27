@@ -15,6 +15,7 @@ import binaries
 import diagram_tools
 import explainers
 import gemini_client
+import settings
 import tts
 import visual_kit
 from quiz import _course_excerpts   # finds course material (slides and books only)
@@ -244,7 +245,50 @@ def _glass(img, box, radius, fill=(255, 255, 255, 22), shadow=110):
     return out.convert("RGB")
 
 
+def _draw_slide_classic(title, bullets, number, total, out_path, diagram_png=None):
+    img = Image.new("RGB", (W, H), "#0f172a")
+    d = ImageDraw.Draw(img)
+    regular = animation_tools.font_path()
+    bold = animation_tools.font_path(bold=True)
+    f_title = ImageFont.truetype(bold, 46 if diagram_png else 54)
+    f_body = ImageFont.truetype(regular, 36)
+    f_small = ImageFont.truetype(regular, 22)
+
+    d.rectangle([0, 0, W, 12], fill="#38bdf8")
+    y = 60 if diagram_png else 70
+    for line in textwrap.wrap(title, width=34 if diagram_png else 30)[:2]:
+        d.text((80, y), line, font=f_title, fill="white")
+        y += 58 if diagram_png else 66
+
+    if diagram_png:
+        # a big white card with the diagram inside
+        d.rounded_rectangle([80, 190, 1200, 655], radius=18, fill="white")
+        pic = Image.open(diagram_png).convert("RGB")
+        scale = min(1090 / pic.width, 435 / pic.height, 1.5)
+        pic = pic.resize((max(1, int(pic.width * scale)), max(1, int(pic.height * scale))),
+                         Image.Resampling.LANCZOS)
+        img.paste(pic, (80 + (1120 - pic.width) // 2, 190 + (465 - pic.height) // 2))
+    else:
+        y += 30
+        for bullet in bullets[:5]:
+            d.ellipse([80, y + 14, 94, y + 28], fill="#38bdf8")
+            for line in textwrap.wrap(bullet, width=46)[:2]:
+                d.text((115, y), line, font=f_body, fill="#e2e8f0")
+                y += 48
+            y += 18
+
+    d.text((80, H - 50), "RouSanGPT", font=f_small, fill="#94a3b8")
+    d.text((W - 150, H - 50), f"{number} / {total}", font=f_small, fill="#94a3b8")
+    img.save(out_path)
+
+
 def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
+    """A slide in the look chosen in Settings: Classic (flat) or Frutiger Aero."""
+    draw = _draw_slide_aero if settings.aero() else _draw_slide_classic
+    draw(title, bullets, number, total, out_path, diagram_png)
+
+
+def _draw_slide_aero(title, bullets, number, total, out_path, diagram_png=None):
     img = animation_tools.aero_background().copy()
     if diagram_png:
         img = _glass(img, [80, 190, 1200, 655], 18, fill=(255, 255, 255, 255), shadow=140)

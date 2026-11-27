@@ -9,6 +9,7 @@ from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageFont
 
 import binaries
 import device_icons
+import settings
 from more_tools import _read_edge, dijkstra_shortest_paths
 
 W, H, FPS = 1280, 720, 30
@@ -80,10 +81,10 @@ def aero_background(light=False):
 
 
 def gloss_rect(d, xy, radius, fill, outline=None, width=1, light=False):
-    """A glossy Aero box: the colour, a lighter upper half and a thin highlight."""
+    """A box. In the Aero look it is glossy: a lighter upper half and a thin highlight."""
     x0, y0, x1, y1 = xy
     d.rounded_rectangle(xy, radius=radius, fill=fill, outline=outline, width=width)
-    if fill is None or x1 - x0 < 6 or y1 - y0 < 6:
+    if fill is None or x1 - x0 < 6 or y1 - y0 < 6 or not settings.aero():
         return
     top = _mix(fill, "#ffffff", 0.30 if light else 0.22)
     inset = max(1, width)
@@ -106,9 +107,16 @@ def frame_title(d, title, light=False):
 
 
 def new_frame(title):
-    img = aero_background().copy()
+    """A frame: the Aero sky and glossy title, or the Classic flat dark one (Settings > Look)."""
+    if settings.aero():
+        img = aero_background().copy()
+        d = ImageDraw.Draw(img)
+        frame_title(d, title)
+        return img, d
+    img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
-    frame_title(d, title)
+    d.rectangle([0, 0, W, 12], fill="#38bdf8")
+    d.text((80, 55), title[:48], font=font(42, True), fill="white")
     return img, d
 
 

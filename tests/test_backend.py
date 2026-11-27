@@ -444,5 +444,38 @@ check("topology: a flowchart keeps its boxes",
 check("read-aloud skips emojis but keeps Arabic",
       server.clean_for_speech("💡 Tip ✅ شو ⚠️") == "Tip شو")
 
+# ---- Settings > Look: Classic (flat) or Frutiger Aero ----
+import animation_tools  # noqa: E402
+
+check("the look starts as Classic", server.get_settings()["look"] == "classic" and not settings.aero())
+try:
+    server.change_settings(server.SettingsRequest(look="shiny"))
+    refused = False
+except HTTPException:
+    refused = True
+check("an unknown look is refused", refused)
+flat_icon = device_icons.icon_image("router", 64, "light")
+flat_frame = animation_tools.new_frame("t")[0].getpixel((640, 360))
+server.change_settings(server.SettingsRequest(look="aero"))
+check("choosing Frutiger Aero takes effect at once", settings.aero() and server.get_settings()["look"] == "aero")
+check("Aero icons differ from the flat ones", device_icons.icon_image("router", 64, "light").tobytes() != flat_icon.tobytes())
+check("Aero animation frames have the sky, not the flat background",
+      animation_tools.new_frame("t")[0].getpixel((640, 360)) != flat_frame)
+broken = []
+for kind_name in visual_kit.KINDS:
+    try:
+        visual = visual_kit.build(kind_name, [])
+        img, d = visual_kit.canvas(visual["title"], visual_kit.LIGHT)
+        visual["draw"](d, visual_kit.LIGHT, None)
+    except Exception as e:
+        broken.append(f"{kind_name}: {e}")
+check(f"every explainer kind also draws in the Aero look {broken}", not broken)
+slide = Path(DATA) / "slide.png"
+video_tools.draw_slide("Title", ["one", "two"], 1, 2, slide)
+aero_slide = slide.read_bytes()
+server.change_settings(server.SettingsRequest(look="classic"))
+video_tools.draw_slide("Title", ["one", "two"], 1, 2, slide)
+check("video slides follow the look", slide.read_bytes() != aero_slide and not settings.aero())
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

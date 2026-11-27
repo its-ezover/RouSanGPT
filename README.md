@@ -68,9 +68,11 @@ is built only with free tools.
   Bob, Trudy the attacker, key, lock, shield, document, envelope, certificate
   authority, globe, home, building, gear), chosen from each device's name, in
   topologies, sequence diagrams, every animation and the explainers.
-- **Frutiger Aero look (this branch):** glass panels over a sky gradient, glossy
-  buttons and message bubbles, a glass-orb Send button, and glossy icons with a
-  shadow, in the light and the dark theme.
+- **Two looks (Settings > Look):** *Classic* (flat) or *Frutiger Aero*: glass
+  panels over a sky gradient, glossy buttons, message bubbles and page icons, a
+  glass-orb Send button, glossy device icons, and a sky behind every picture,
+  animation and video, in the light and the dark theme. Pictures and videos
+  already made keep the look they were made with.
 - **Friendly answers:** the tutor uses a few fitting emojis (💡 tips, ⚠️ common
   mistakes, ✅ correct, 🔐 encryption...); read-aloud skips them.
 - **Animations:** message exchanges, store-and-forward packet flow, sliding window
@@ -589,6 +591,7 @@ with the install command instead of a crash.
 | `explainers.py`, `visual_kit.py` | the slides' figures as pictures and animations: the two tools, the registry and the shared drawing code |
 | `net_visuals.py`, `crypto_visuals.py` | the networking and cryptography figures |
 | `device_icons.py` | the device and security icons, and choosing one from a name |
+| `ui_icons.py`, `web/aero/` | the page's icons for the Frutiger Aero look (`python ui_icons.py` makes them again) |
 | `video_tools.py` | narrated video generator |
 | `quiz.py` | quiz generator and answer checker |
 | `install.sh`, `uninstall.sh` | Linux installer |

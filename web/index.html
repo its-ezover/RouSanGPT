@@ -8,6 +8,7 @@
 <script>
   // apply the saved theme before the page paints (no flash)
   try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  try { const l = localStorage.getItem("look"); if (l) document.documentElement.dataset.look = l; } catch (e) {}
 </script>
 <style>
   /* ---------- Theme ---------- */
@@ -358,8 +359,9 @@
 
   /* ================= Frutiger Aero =================
      Glass panels over a bright sky, glossy buttons and bubbles. Only colours and
-     surfaces change here: the layout above stays the same. */
-  :root {
+     surfaces change here: the layout above stays the same. It applies when
+     Settings > Look is Frutiger Aero (the page then has data-look="aero"). */
+  :root[data-look="aero"] {
     --bg:#e9f6ff; --surface:rgba(255,255,255,.68); --surface-2:rgba(255,255,255,.55);
     --surface-3:rgba(196,228,250,.9); --border:rgba(255,255,255,.9); --text:#0b2a45; --muted:#4d6d8a;
     --accent:#1592dc; --accent-2:#5cc8ff; --on-accent:#ffffff; --user:#1b9ae4; --on-user:#ffffff;
@@ -376,7 +378,7 @@
     color-scheme:light;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root[data-look="aero"]:not([data-theme="light"]) {
       --bg:#06263f; --surface:rgba(14,52,82,.62); --surface-2:rgba(24,70,104,.55); --surface-3:rgba(40,96,138,.75);
       --border:rgba(140,212,255,.24); --text:#e7f5ff; --muted:#9cc4e2; --accent:#4cc3ff; --accent-2:#8fdcff;
       --on-accent:#032338; --user:#1b8fd6; --on-user:#ffffff; --code:rgba(3,22,38,.72);
@@ -391,7 +393,7 @@
       color-scheme:dark;
     }
   }
-  :root[data-theme="dark"] {
+  :root[data-look="aero"][data-theme="dark"] {
     --bg:#06263f; --surface:rgba(14,52,82,.62); --surface-2:rgba(24,70,104,.55); --surface-3:rgba(40,96,138,.75);
     --border:rgba(140,212,255,.24); --text:#e7f5ff; --muted:#9cc4e2; --accent:#4cc3ff; --accent-2:#8fdcff;
     --on-accent:#032338; --user:#1b8fd6; --on-user:#ffffff; --code:rgba(3,22,38,.72);
@@ -406,69 +408,86 @@
     color-scheme:dark;
   }
 
-  body { background:var(--sky); background-attachment:fixed;
+  :root[data-look="aero"] body { background:var(--sky); background-attachment:fixed;
          font-family:"Segoe UI", Frutiger, "Frutiger Linotype", "Myriad Pro", "Noto Sans", Inter, system-ui,
                      "Noto Sans Arabic", sans-serif; }
   /* glass surfaces */
-  #side, header, #bar, .panel, .setup-card, .card, .suggest button, .bot .msg:not(.waiting) {
+  :root[data-look="aero"] #side, :root[data-look="aero"] header, :root[data-look="aero"] #bar, :root[data-look="aero"] .panel, :root[data-look="aero"] .setup-card, :root[data-look="aero"] .card, :root[data-look="aero"] .suggest button, :root[data-look="aero"] .bot .msg:not(.waiting) {
     -webkit-backdrop-filter:blur(16px) saturate(1.35); backdrop-filter:blur(16px) saturate(1.35); }
-  #side { background:var(--gloss), var(--surface); border-right:1px solid var(--border);
+  :root[data-look="aero"] #side { background:var(--gloss), var(--surface); border-right:1px solid var(--border);
           box-shadow:var(--glass-edge), 4px 0 24px rgba(15,70,120,.08); }
-  header { background:var(--surface-2); border-bottom:1px solid var(--border); }
-  #bar { background:var(--gloss), var(--surface); border:1px solid var(--border); border-radius:22px;
+  :root[data-look="aero"] header { background:var(--surface-2); border-bottom:1px solid var(--border); }
+  :root[data-look="aero"] #bar { background:var(--gloss), var(--surface); border:1px solid var(--border); border-radius:22px;
          box-shadow:var(--glass-edge), var(--shadow); }
-  #bar:focus-within { border-color:var(--accent-2); box-shadow:var(--glass-edge), var(--shadow), 0 0 0 3px rgba(92,200,255,.35); }
-  .panel, .setup-card { background:var(--gloss), var(--surface); border:1px solid var(--border);
+  :root[data-look="aero"] #bar:focus-within { border-color:var(--accent-2); box-shadow:var(--glass-edge), var(--shadow), 0 0 0 3px rgba(92,200,255,.35); }
+  :root[data-look="aero"] .panel, :root[data-look="aero"] .setup-card { background:var(--gloss), var(--surface); border:1px solid var(--border);
                         box-shadow:var(--glass-edge), var(--shadow); }
-  .phead { background:transparent; }
-  .card { background:var(--surface-2); border:1px solid var(--border); box-shadow:var(--glass-edge); }
+  :root[data-look="aero"] .phead { background:transparent; }
+  :root[data-look="aero"] .card { background:var(--surface-2); border:1px solid var(--border); box-shadow:var(--glass-edge); }
   /* the tutor's answers sit on a glass card */
-  .bot .msg:not(.waiting) { background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  :root[data-look="aero"] .bot .msg:not(.waiting) { background:var(--surface); border:1px solid var(--border); border-radius:18px;
                             padding:12px 18px; box-shadow:var(--glass-edge), 0 4px 18px rgba(15,70,120,.08); }
   /* glossy blue bubbles for the student */
-  .user .msg { background:var(--aero-btn); color:#fff; border:1px solid rgba(10,110,180,.55);
+  :root[data-look="aero"] .user .msg { background:var(--aero-btn); color:#fff; border:1px solid rgba(10,110,180,.55);
                text-shadow:0 1px 1px rgba(0,40,80,.3);
                box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 3px 10px rgba(20,110,180,.3); }
   /* glossy buttons */
-  #newChat, .primary { background:var(--aero-btn); color:#fff; border:1px solid #1278bd;
+  :root[data-look="aero"] #newChat, :root[data-look="aero"] .primary { background:var(--aero-btn); color:#fff; border:1px solid #1278bd;
                        text-shadow:0 1px 1px rgba(0,40,80,.35);
                        box-shadow:inset 0 1px 0 rgba(255,255,255,.75), 0 3px 10px rgba(20,110,180,.32); }
-  #newChat:hover, .primary:hover { background:var(--aero-btn); filter:brightness(1.07) saturate(1.1); }
-  button { background:var(--gloss), var(--surface-2); border:1px solid var(--border);
+  :root[data-look="aero"] #newChat:hover, :root[data-look="aero"] .primary:hover { background:var(--aero-btn); filter:brightness(1.07) saturate(1.1); }
+  :root[data-look="aero"] button { background:var(--gloss), var(--surface-2); border:1px solid var(--border);
            box-shadow:inset 0 1px 0 rgba(255,255,255,.7); }
-  button:hover { background:var(--gloss), var(--surface-3); }
-  .ico, .actions button, .item .act, #side .bottom button, #mic { border-color:transparent; box-shadow:none;
+  :root[data-look="aero"] button:hover { background:var(--gloss), var(--surface-3); }
+  :root[data-look="aero"] .ico, :root[data-look="aero"] .actions button, :root[data-look="aero"] .item .act, :root[data-look="aero"] #side .bottom button, :root[data-look="aero"] #mic { border-color:transparent; box-shadow:none;
                                                                background:none; }
-  .ico:hover, .actions button:hover, #side .bottom button:hover, #mic:hover { background:var(--gloss), var(--surface-2); }
+  :root[data-look="aero"] .ico:hover, :root[data-look="aero"] .actions button:hover, :root[data-look="aero"] #side .bottom button:hover, :root[data-look="aero"] #mic:hover { background:var(--gloss), var(--surface-2); }
   /* the send button: a glass orb */
-  #send { background:radial-gradient(circle at 50% 28%, #d4f6ff 0%, #6cd0fb 32%, #1b93de 68%, #0b6db3 100%);
+  :root[data-look="aero"] #send { background:radial-gradient(circle at 50% 28%, #d4f6ff 0%, #6cd0fb 32%, #1b93de 68%, #0b6db3 100%);
           border:1px solid #0b65a3; color:#fff;
           box-shadow:inset 0 2px 3px rgba(255,255,255,.75), inset 0 -3px 6px rgba(0,60,120,.35), 0 3px 10px rgba(10,100,170,.45); }
-  #send:hover { background:radial-gradient(circle at 50% 28%, #e4faff 0%, #84dafd 32%, #22a0ea 68%, #0b75c0 100%); }
+  :root[data-look="aero"] #send:hover { background:radial-gradient(circle at 50% 28%, #e4faff 0%, #84dafd 32%, #22a0ea 68%, #0b75c0 100%); }
   /* the chat list */
-  .item:hover { background:var(--surface-2); }
-  .item.active { background:var(--gloss), linear-gradient(to bottom, rgba(146,214,255,.55), rgba(92,190,250,.35));
+  :root[data-look="aero"] .item:hover { background:var(--surface-2); }
+  :root[data-look="aero"] .item.active { background:var(--gloss), linear-gradient(to bottom, rgba(146,214,255,.55), rgba(92,190,250,.35));
                  color:var(--text); box-shadow:inset 0 0 0 1px var(--border); }
   /* fields */
-  select, #search, .field input, .field textarea, .prow input {
+  :root[data-look="aero"] select, :root[data-look="aero"] #search, :root[data-look="aero"] .field input, :root[data-look="aero"] .field textarea, :root[data-look="aero"] .prow input {
     background:var(--gloss), var(--surface); border:1px solid var(--border); box-shadow:inset 0 1px 2px rgba(15,70,120,.1); }
-  #lang { background:var(--gloss), var(--surface-2); }
+  :root[data-look="aero"] #lang { background:var(--gloss), var(--surface-2); }
   /* welcome screen */
-  .hero-logo { filter:drop-shadow(0 8px 18px rgba(20,120,200,.35)); }
-  .suggest button { background:var(--gloss), var(--surface); border:1px solid var(--border);
+  :root[data-look="aero"] .hero-logo { filter:drop-shadow(0 8px 18px rgba(20,120,200,.35)); }
+  :root[data-look="aero"] .suggest button { background:var(--gloss), var(--surface); border:1px solid var(--border);
                     box-shadow:var(--glass-edge), 0 4px 14px rgba(15,70,120,.08); }
-  .suggest button:hover { border-color:var(--accent-2); background:var(--gloss), var(--surface);
+  :root[data-look="aero"] .suggest button:hover { border-color:var(--accent-2); background:var(--gloss), var(--surface);
                           box-shadow:var(--glass-edge), var(--shadow); }
-  .suggest .sg-ico { color:#fff; background:radial-gradient(circle at 50% 30%, #c8f2ff 0%, #4fc0f7 40%, #1488d6 100%);
+  :root[data-look="aero"] .suggest .sg-ico { color:#fff; background:radial-gradient(circle at 50% 30%, #c8f2ff 0%, #4fc0f7 40%, #1488d6 100%);
                      box-shadow:inset 0 1px 1px rgba(255,255,255,.8), 0 2px 6px rgba(20,110,180,.35); }
   /* badges, pills, chips, tables */
-  .badge, .pill, .chip { background:var(--gloss), var(--surface); border:1px solid var(--border);
+  :root[data-look="aero"] .badge, :root[data-look="aero"] .pill, :root[data-look="aero"] .chip { background:var(--gloss), var(--surface); border:1px solid var(--border);
                          box-shadow:inset 0 1px 0 rgba(255,255,255,.7); }
-  .table-wrap { background:var(--surface); box-shadow:var(--glass-edge); }
-  .msg th { background:var(--gloss), linear-gradient(to bottom, rgba(146,214,255,.5), rgba(92,190,250,.3)); }
-  .msg details.sources ul { background:var(--surface-2); }
-  .msg img { box-shadow:0 4px 14px rgba(15,70,120,.15); }
-  .dots i { background:radial-gradient(circle at 50% 30%, #d4f6ff, #2aa2ef 70%); }
+  :root[data-look="aero"] .table-wrap { background:var(--surface); box-shadow:var(--glass-edge); }
+  :root[data-look="aero"] .msg th { background:var(--gloss), linear-gradient(to bottom, rgba(146,214,255,.5), rgba(92,190,250,.3)); }
+  :root[data-look="aero"] .msg details.sources ul { background:var(--surface-2); }
+  :root[data-look="aero"] .msg img { box-shadow:0 4px 14px rgba(15,70,120,.15); }
+  :root[data-look="aero"] .dots i { background:radial-gradient(circle at 50% 30%, #d4f6ff, #2aa2ef 70%); }
+  /* the page's icons: the Classic line icons, or the glossy Aero pictures in web/aero
+     (made by ui_icons.py), following Settings > Look */
+  :root:not([data-look="aero"]) .ai { display:none !important; }
+  :root[data-look="aero"] .flat-ico { display:none !important; }
+  .ai { width:20px; height:20px; flex-shrink:0; object-fit:contain; -webkit-user-drag:none; user-select:none; }
+  :root[data-look="aero"] .brand .ico .ai, :root[data-look="aero"] header .ico .ai, :root[data-look="aero"] #mclose .ai { width:22px; height:22px; }
+  :root[data-look="aero"] #side .bottom button .ai { width:28px; height:28px; }
+  :root[data-look="aero"] .search .ai { position:absolute; left:9px; top:50%; transform:translateY(-50%); width:17px; height:17px; }
+  :root[data-look="aero"] #mic .ai { width:22px; height:22px; }
+  :root[data-look="aero"] #mic.rec { background:var(--gloss), #ffe3df; }
+  :root[data-look="aero"] .actions .ai { width:17px; height:17px; }
+  :root[data-look="aero"] .tools-row .ai, :root[data-look="aero"] .msg details.sources summary .ai { width:17px; height:17px; }
+  :root[data-look="aero"] .error-card .ai { width:19px; height:19px; }
+  :root[data-look="aero"] .suggest .sg-ico { background:none; box-shadow:none; padding:0; }
+  :root[data-look="aero"] .suggest .sg-ico .ai { width:36px; height:36px; }
+  :root[data-look="aero"] .drop .ai { width:44px; height:44px; margin-bottom:4px; }
+  :root[data-look="aero"] #dropOverlay .ai { width:56px; height:56px; }
 </style>
 </head>
 <body>
@@ -478,7 +497,7 @@
       <img class="logo" src="/static/logo-mark.png" alt="">
       <div><b>RouSanGPT</b><small>Networks &amp; Crypto tutor</small></div>
       <button class="ico" id="hideSide" title="Hide the sidebar" aria-label="Hide the sidebar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+        <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg><img class="ai" src="/static/aero/sidebar.png" alt="">
       </button>
     </div>
     <button id="newChat">
@@ -486,22 +505,22 @@
       New chat
     </button>
     <div class="search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><img class="ai" src="/static/aero/search.png" alt="">
       <input id="search" type="search" placeholder="Search chats" aria-label="Search chats" autocomplete="off">
     </div>
     <div class="list-label">Chats</div>
     <nav id="list" aria-label="Saved chats"></nav>
     <div class="bottom">
       <button id="openMaterials" title="Course materials">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2.5Z"/><path d="M8 7h7"/></svg>
+        <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2.5Z"/><path d="M8 7h7"/></svg><img class="ai" src="/static/aero/materials.png" alt="">
         Materials
       </button>
       <button id="openTools" title="Formula tools">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>
+        <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg><img class="ai" src="/static/aero/tools.png" alt="">
         Tools
       </button>
       <button id="openSettingsBtn" title="Settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><img class="ai" src="/static/aero/settings.png" alt="">
         Settings
       </button>
     </div>
@@ -510,7 +529,7 @@
   <main>
     <header>
       <button class="ico" id="toggleSide" title="Show or hide the sidebar" aria-label="Show or hide the sidebar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg><img class="ai" src="/static/aero/menu.png" alt="">
       </button>
       <div id="chatTitle">New chat</div>
       <div class="head-right">
@@ -520,8 +539,8 @@
           <option value="local">Local model</option>
         </select>
         <button class="ico" id="theme" title="Switch light / dark" aria-label="Switch between light and dark theme">
-          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="flat-ico moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><img class="ai moon" src="/static/aero/moon.png" alt="">
+          <svg class="flat-ico sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><img class="ai sun" src="/static/aero/sun.png" alt="">
         </button>
       </div>
     </header>
@@ -552,7 +571,7 @@
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="mtitle">
     <div class="phead"><h2 id="mtitle"></h2>
       <button id="mclose" class="ico" title="Close (Esc)" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg><img class="ai" src="/static/aero/close.png" alt="">
       </button>
     </div>
     <div id="mbody"></div>
@@ -561,7 +580,7 @@
 
 <div id="dropOverlay" class="hidden">
   <div>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+    <svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><img class="ai" src="/static/aero/upload.png" alt="">
     <b>Drop to add to the course materials</b>
     <span class="muted">PDF, PPTX, PPT or TXT files, or a folder of them</span>
   </div>
@@ -584,16 +603,16 @@ const mbody = document.getElementById("mbody");
 const searchEl = document.getElementById("search");
 const chatTitleEl = document.getElementById("chatTitle");
 
-const ICON = {
-  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
-  stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>',
-  speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
-  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>',
-  wrench: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg>',
-  book: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2Z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8Z"/></svg>',
-  alert: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
-  retry: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>'
+const ICON = {   // each: the Classic line icon, then the Aero icon (web/aero)
+  mic: '<svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><img class="ai" src="/static/aero/mic.png" alt="">',
+  stop: '<svg class="flat-ico" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg><img class="ai" src="/static/aero/stop.png" alt="">',
+  speaker: '<svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg><img class="ai" src="/static/aero/speaker.png" alt="">',
+  copy: '<svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><img class="ai" src="/static/aero/copy.png" alt="">',
+  check: '<svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg><img class="ai" src="/static/aero/check.png" alt="">',
+  wrench: '<svg class="flat-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg><img class="ai" src="/static/aero/wrench.png" alt="">',
+  book: '<svg class="flat-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2Z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8Z"/></svg><img class="ai" src="/static/aero/book.png" alt="">',
+  alert: '<svg class="flat-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><img class="ai" src="/static/aero/alert.png" alt="">',
+  retry: '<svg class="flat-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><img class="ai" src="/static/aero/retry.png" alt="">'
 };
 let allChats = [];
 let pendingTitle = null;      // title shown for a new chat until its first answer is saved
@@ -965,8 +984,9 @@ function welcome() {
   SUGGESTIONS.forEach(function (sg) {
     const b = el("button");
     const ico = el("span", "sg-ico");
-    ico.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-                    'stroke-linecap="round" stroke-linejoin="round">' + SG_ICONS[sg[0]] + "</svg>";
+    ico.innerHTML = '<svg class="flat-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+                    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + SG_ICONS[sg[0]] + "</svg>" +
+                    '<img class="ai" src="/static/aero/' + sg[0] + '.png" alt="">';
     const text = el("span", "sg-text");
     const title = el("b", null, sg[2]);
     title.appendChild(el("small", null, sg[1]));
@@ -1228,7 +1248,7 @@ function hideModal() { modalEl.classList.add("hidden"); materialsView = null; }
 
 // ---- Course materials: the panel, and adding files (drag and drop or "choose files") ----
 const MATERIAL_TYPES = [".pdf", ".pptx", ".ppt", ".txt"];
-const UPLOAD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
+const UPLOAD_ICON = '<svg class="flat-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><img class="ai" src="/static/aero/upload.png" alt="">';
 const uploads = [];          // files being added: { file, name, state, text }
 let uploading = false;       // the upload loop is running
 let materialsView = null;    // { queue, list } while the Materials panel is open
@@ -1761,6 +1781,14 @@ async function openTools(note) {
   mbody.appendChild(builtIn);
 }
 
+// Settings > Look: "classic" (flat) or "aero" (Frutiger Aero). The pictures, videos and
+// animations made from then on follow it too (the server reads the same setting).
+function applyLook(look) {
+  look = look === "aero" ? "aero" : "classic";
+  document.documentElement.dataset.look = look;
+  try { localStorage.setItem("look", look); } catch (e) {}
+}
+
 let firstStatus = true;
 async function checkStatus() {
   try {
@@ -1768,6 +1796,7 @@ async function checkStatus() {
     appMode = s.app_mode;
     if (firstStatus) {                       // defaults from Settings, unless chosen here before
       firstStatus = false;
+      applyLook(s.look);
       let saved = {};
       try { saved = { lang: localStorage.getItem("lang"), backend: localStorage.getItem("backend") }; } catch (e) {}
       if (!saved.lang) langEl.value = s.default_language || "auto";
@@ -1872,6 +1901,21 @@ async function openSettings(note) {
     } catch (e) { dmsg.className = "err"; dmsg.textContent = e.message; }
   }
   lang.onchange = saveDefaults; back.onchange = saveDefaults;
+
+  // Look
+  const lk = section("Look", "How the app, its icons, pictures, animations and videos look. Pictures and " +
+                     "videos you already made keep the look they were made with.");
+  const look = selectBox(lk, "Style", [["classic", "Classic (flat)"], ["aero", "Frutiger Aero (glass and gloss)"]],
+                         s.look || "classic");
+  const lmsg = el("p", "muted", "");
+  lk.appendChild(lmsg);
+  look.onchange = async function () {
+    try {
+      await api("POST", "/api/settings", { look: look.value });
+      applyLook(look.value);
+      lmsg.className = "ok"; lmsg.textContent = "Saved.";
+    } catch (e) { lmsg.className = "err"; lmsg.textContent = e.message; }
+  };
 
   // Local model
   const box = section("Local model (Ollama)", "Answers without the internet, on your own computer. Slower than Gemini and needs a few GB of disk space.");

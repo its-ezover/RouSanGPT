@@ -17,11 +17,12 @@ the course's calculators, never from the AI.
 import math
 from pathlib import Path
 
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 
 import animation_tools as at
 import device_icons
 import diagram_tools
+import settings
 
 W, H = at.W, at.H
 
@@ -37,12 +38,19 @@ MAX_ROWS = 14
 # ---------- drawing helpers ----------
 
 def canvas(title, th):
-    """A frame in the Frutiger Aero style: a sky behind it and a glossy title bar."""
+    """A frame: in the Aero look a sky behind it and a glossy title bar, in the
+    Classic look plain white with a blue bar (Settings > Look)."""
     if th is DARK:
         return at.new_frame(title)
-    img = at.aero_background(light=True).copy()
+    if settings.aero():
+        img = at.aero_background(light=True).copy()
+        d = ImageDraw.Draw(img)
+        at.frame_title(d, title, light=True)
+        return img, d
+    img = Image.new("RGB", (W, H), th["bg"])
     d = ImageDraw.Draw(img)
-    at.frame_title(d, title, light=True)
+    d.rectangle([0, 0, W, 12], fill=th["accent"])
+    d.text((80, 55), title[:48], font=at.font(42, True), fill=th["text"])
     return img, d
 
 

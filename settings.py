@@ -5,6 +5,7 @@ The Gemini API key is read from settings.json first, then from .env (dev mode).
 import json
 import os
 import threading
+import time
 
 from dotenv import load_dotenv
 
@@ -17,7 +18,9 @@ DEFAULTS = {
     "local_model": "",
     "default_language": "auto",       # auto, english or arabic
     "default_backend": "auto",        # auto, gemini or local
+    "look": "classic",                # classic (flat) or aero (Frutiger Aero: glass and gloss)
 }
+LOOKS = ("classic", "aero")
 _lock = threading.Lock()
 
 
@@ -60,6 +63,22 @@ def key_source():
     if (os.getenv("GEMINI_API_KEY") or "").strip():
         return "env"
     return ""
+
+
+_look_cache = [0.0, False]
+
+
+def aero():
+    """True when the Frutiger Aero look is chosen. The pictures and animations ask
+    for every frame, so the answer is kept for one second instead of reading the file."""
+    now = time.monotonic()
+    if now - _look_cache[0] > 1.0:
+        try:
+            _look_cache[1] = get("look") == "aero"
+        except Exception:
+            _look_cache[1] = False
+        _look_cache[0] = now
+    return _look_cache[1]
 
 
 def local_model():

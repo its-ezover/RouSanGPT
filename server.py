@@ -130,6 +130,7 @@ class SettingsRequest(BaseModel):
     default_language: str | None = None
     default_backend: str | None = None
     local_model: str | None = None
+    look: str | None = None
 
 
 class ModelRequest(BaseModel):
@@ -155,6 +156,7 @@ def status():
             "knowledge_files": sum(len(v) for k, v in agent.SOURCES.items() if k != "answers"),
             "has_key": bool(settings.api_key()),
             "default_language": s["default_language"], "default_backend": s["default_backend"],
+            "look": s.get("look", "classic"),
             "local_running": running, "local_ready": running and local_ai.has_model(models, wanted),
             "local_installed": running or local_ai.is_installed(),
             "local_model": wanted}
@@ -463,6 +465,7 @@ def get_settings():
     return {"has_key": bool(key), "key_source": settings.key_source(),
             "key_hint": ("..." + key[-4:]) if key else "",
             "default_language": s["default_language"], "default_backend": s["default_backend"],
+            "look": s.get("look", "classic"),
             "local_model": agent.local_model(), "app_mode": lifecycle.app_mode,
             "data_dir": str(DATA_DIR)}
 
@@ -494,7 +497,12 @@ def change_settings(req: SettingsRequest):
         if not re.fullmatch(r"[A-Za-z0-9._:/-]{1,80}", model):
             raise HTTPException(400, "That is not a valid model name.")
         changes["local_model"] = model
+    if req.look is not None:
+        if req.look not in settings.LOOKS:
+            raise HTTPException(400, "Unknown look")
+        changes["look"] = req.look
     settings.save(changes)
+    settings._look_cache[0] = 0.0            # the pictures follow at once
     return get_settings()
 
 
