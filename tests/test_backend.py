@@ -287,5 +287,34 @@ check("crypto lecture PDFs count as slides, homework PDFs do not",
       knowledge.classify("Ch02-Number Theory.pdf") == "slides" and knowledge.classify("Ch3 HW.pdf") == "homework"
       and knowledge.classify("Ch1_suggested_solution.pdf") == "answers")
 
+# ---- fixes from the code review of the first version ----
+import extra_tools  # noqa: E402
+import more_tools  # noqa: E402
+import tools  # noqa: E402
+
+check("an answer key saved as slides stays hidden (Ch3_solutions.pptx, HW2_answers.ppt)",
+      knowledge.classify("Ch3_solutions.pptx") == "answers" and knowledge.classify("HW2_answers.ppt") == "answers"
+      and knowledge.classify("Lecture5.pptx") == "slides")
+check("'resolution' is not 'solution': DNS_name_resolution.pdf is a book, HW2.pdf is homework",
+      knowledge.classify("DNS_name_resolution.pdf") == "other"
+      and knowledge.classify("ARP_address_resolution.pdf") == "other" and knowledge.classify("HW2.pdf") == "homework")
+check("checksum: '1010' is binary, hex needs digits other than 0/1 or 0x",
+      extra_tools._to_int("1010", 16) == 0b1010 and extra_tools._to_int("0x1010", 16) == 0x1010)
+r = extra_tools.internet_checksum_calculate(["01011100", "01100101"])
+check("checksum: the textbook's 8-bit example works", (r["word_size_bits"], r["checksum"]) == (8, "00111110"))
+r = extra_tools.internet_checksum_calculate(["0110011001100000", "0101010101010101", "1000111100001100"])
+check("checksum: Kurose's 16-bit example still works", r["checksum"] == "1011010100111101")
+r = tools.split_into_subnets("10.0.0.0/24", 128)
+check("128 subnets: 64 listed, and the reply says it is cut short",
+      r["truncated"] and r["total_subnets"] == 128 and len(r["subnets"]) == 64)
+check("2^24 subnets do not fill the memory", tools.split_into_subnets("10.0.0.0/8", 2 ** 24)["truncated"])
+check("a link rate of 0 is an error message, not a crash", "error" in tools.delay_calculation(1000, 0, 10))
+check("Dijkstra keeps the cheaper of two equal links",
+      more_tools.dijkstra_shortest_paths(["A-B:1", "A-B:5"], "A")["shortest_distances"]["B"] == 1)
+check("Dijkstra accepts names with hyphens",
+      more_tools.dijkstra_shortest_paths(["R-1->R-2:3"], "R-1")["shortest_distances"]["R-2"] == 3)
+check("the calculator refuses answers with millions of digits",
+      "error" in extra_tools.calculator("((10**999)**1000)**1000") and "error" in extra_tools.calculator("(9**999)**999"))
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

@@ -18,8 +18,11 @@ if _BUNDLED_MODEL.is_dir():
     from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
     ONNXMiniLM_L6_V2.DOWNLOAD_PATH = _BUNDLED_MODEL
 
-ANSWER_KEY_WORDS = ["solution", "answer"]            # hidden from the tutor
-HOMEWORK_WORDS = ["hw", "homework", "question"]      # labelled as homework
+# Whole words of the file name (split at anything that is not a letter), so
+# 'DNS_name_resolution.pdf' is not an answer key and 'HW2.pdf' is homework
+ANSWER_KEY_WORDS = {"solution", "solutions", "answer", "answers"}   # hidden from the tutor
+HOMEWORK_WORDS = {"hw", "homework", "homeworks", "assignment", "assignments",
+                  "question", "questions"}                          # labelled as homework
 GROUPS = ("slides", "homework", "other", "answers")
 
 # The model that turns text into numbers for searching (Chroma's default, the same
@@ -31,11 +34,12 @@ collection = db.get_or_create_collection("course", embedding_function=_embedder)
 
 def classify(name):
     n = name.lower()
+    words = set(re.split(r"[^a-z]+", n))
+    if words & ANSWER_KEY_WORDS:         # first: an answer key stays hidden even as slides
+        return "answers"
     if n.endswith((".pptx", ".ppt")):
         return "slides"
-    if any(w in n for w in ANSWER_KEY_WORDS):
-        return "answers"
-    if any(w in n for w in HOMEWORK_WORDS):
+    if words & HOMEWORK_WORDS:
         return "homework"
     if n.endswith(".pdf") and re.match(r"ch(apter)?[\s_-]*\d", n):
         return "slides"                  # lecture slides saved as PDF, e.g. 'Ch02-Number Theory.pdf'

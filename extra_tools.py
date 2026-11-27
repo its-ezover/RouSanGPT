@@ -5,71 +5,96 @@ import operator
 
 # ---------- Internet checksum (16-bit one's complement) ----------
 
-def _to_int16(word):
-    """Accepts a 16-bit binary string ('0110011001100000') or hex ('0x6660' or '6660')."""
-    w = word.strip().replace(" ", "")
+def _to_int(word, bits):
+    """A binary string ('0110011001100000', '01011100', '1010') or hex ('0x6660', or
+    '6660' when it has digits other than 0 and 1). A string of only 0s and 1s is
+    always read as binary, never as hex."""
+    w = word.strip().replace(" ", "").replace("_", "")
     if w.lower().startswith("0x"):
         value = int(w, 16)
-    elif len(w) == 16 and set(w) <= {"0", "1"}:
+    elif w and set(w) <= {"0", "1"}:
         value = int(w, 2)
     else:
         value = int(w, 16)
-    if not 0 <= value <= 0xFFFF:
-        raise ValueError(f"'{word}' does not fit in 16 bits")
+    if not 0 <= value < (1 << bits):
+        raise ValueError(f"'{word}' does not fit in {bits} bits")
     return value
 
 
-def _ones_complement_sum(values):
+def _word_bits(words, word_size_bits):
+    if word_size_bits not in (0, 8, 16):
+        raise ValueError("word_size_bits must be 16 (UDP, TCP, IP) or 8")
+    if word_size_bits:
+        return word_size_bits
+    clean = [w.strip().replace(" ", "").replace("_", "") for w in words]
+    if clean and all(set(w) <= {"0", "1"} and len(w) == 8 for w in clean):
+        return 8                     # every word is written as 8 bits: an 8-bit problem
+    return 16
+
+
+def _ones_complement_sum(values, bits):
+    mask = (1 << bits) - 1
     total = 0
     steps = []
     for v in values:
         total += v
-        carried = total > 0xFFFF
+        carried = total > mask
         if carried:
-            total = (total & 0xFFFF) + 1      # wrap the carry around
-        steps.append(f"+ {v:016b} -> {total:016b}" + ("  (carry wrapped around)" if carried else ""))
+            total = (total & mask) + 1      # wrap the carry around
+        steps.append(f"+ {v:0{bits}b} -> {total:0{bits}b}" + ("  (carry wrapped around)" if carried else ""))
     return total, steps
 
 
-def internet_checksum_calculate(words: list[str]) -> dict:
-    """Calculate the Internet checksum (used by UDP, TCP and IP) of a list of
-    16-bit words. Each word is a 16-bit binary string such as '0110011001100000'
-    or a hex value such as '0x6660'. The words are added with one's complement
-    addition (a carry out of the top bit is added back at the bottom), and the
-    checksum is the one's complement (all bits flipped) of that sum. Returns the sum,
-    the checksum in binary and hex, and the addition steps."""
+def _read_words(words, word_size_bits):
+    bits = _word_bits(words, int(word_size_bits))
+    return [_to_int(w, bits) for w in words], bits
+
+
+def internet_checksum_calculate(words: list[str], word_size_bits: int = 0) -> dict:
+    """Calculate the Internet checksum (used by UDP, TCP and IP) of a list of words.
+    Each word is binary such as '0110011001100000' or hex such as '0x6660'. A word
+    made only of 0s and 1s is always read as binary. word_size_bits: 16 (the real
+    protocols) or 8 (textbook problems with 8-bit bytes); 0 = automatic (8 when
+    every word is written as 8 bits, otherwise 16). The words are added with one's
+    complement addition (a carry out of the top bit is added back at the bottom),
+    and the checksum is the one's complement (all bits flipped) of that sum. Returns
+    the sum, the checksum in binary and hex, and the addition steps."""
     try:
-        values = [_to_int16(w) for w in words]
+        values, bits = _read_words(words, word_size_bits)
     except ValueError as e:
         return {"error": f"Could not read the words: {e}"}
     if not values:
-        return {"error": "Give at least one 16-bit word."}
-    total, steps = _ones_complement_sum(values)
-    checksum = 0xFFFF ^ total
+        return {"error": "Give at least one word."}
+    total, steps = _ones_complement_sum(values, bits)
+    checksum = ((1 << bits) - 1) ^ total
+    digits = bits // 4
     return {
-        "sum": f"{total:016b}",
-        "sum_hex": f"0x{total:04X}",
-        "checksum": f"{checksum:016b}",
-        "checksum_hex": f"0x{checksum:04X}",
+        "word_size_bits": bits,
+        "sum": f"{total:0{bits}b}",
+        "sum_hex": f"0x{total:0{digits}X}",
+        "checksum": f"{checksum:0{bits}b}",
+        "checksum_hex": f"0x{checksum:0{digits}X}",
         "steps": steps,
     }
 
 
-def internet_checksum_verify(words_including_checksum: list[str]) -> dict:
-    """Check a received message with the Internet checksum. Give ALL 16-bit words,
-    including the checksum word itself (binary like '0110011001100000' or hex like
-    '0x6660'). If the one's complement sum is all ones (1111111111111111), no error
-    is detected; otherwise an error is detected."""
+def internet_checksum_verify(words_including_checksum: list[str], word_size_bits: int = 0) -> dict:
+    """Check a received message with the Internet checksum. Give ALL words, including
+    the checksum word itself (binary like '0110011001100000' or hex like '0x6660').
+    word_size_bits: 16, 8, or 0 = automatic (as in internet_checksum_calculate). If
+    the one's complement sum is all ones, no error is detected; otherwise an error is
+    detected."""
     try:
-        values = [_to_int16(w) for w in words_including_checksum]
+        values, bits = _read_words(words_including_checksum, word_size_bits)
     except ValueError as e:
         return {"error": f"Could not read the words: {e}"}
     if not values:
-        return {"error": "Give at least one 16-bit word."}
-    total, steps = _ones_complement_sum(values)
+        return {"error": "Give at least one word."}
+    total, steps = _ones_complement_sum(values, bits)
     return {
-        "sum": f"{total:016b}",
-        "error_detected": total != 0xFFFF,
+        "word_size_bits": bits,
+        "sum": f"{total:0{bits}b}",
+        "error_detected": total != (1 << bits) - 1,
         "steps": steps,
     }
 
@@ -94,8 +119,12 @@ def _evaluate(node):
         return node.value
     if isinstance(node, ast.BinOp) and type(node.op) in _OPERATORS:
         left, right = _evaluate(node.left), _evaluate(node.right)
-        if isinstance(node.op, ast.Pow) and abs(right) > 1000:
-            raise ValueError("exponent too large")
+        if isinstance(node.op, ast.Pow):
+            if abs(right) > 1000:
+                raise ValueError("exponent too large")
+            # stop answers with millions of digits, e.g. (9**999)**999
+            if left not in (0, 1, -1) and abs(right) * math.log10(max(abs(left), 2)) > 10000:
+                raise ValueError("the result would have more than 10,000 digits")
         return _OPERATORS[type(node.op)](left, right)
     if isinstance(node, ast.UnaryOp) and type(node.op) in _OPERATORS:
         return _OPERATORS[type(node.op)](_evaluate(node.operand))

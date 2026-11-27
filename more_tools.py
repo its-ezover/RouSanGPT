@@ -56,9 +56,32 @@ def crc_check(received_bits: str, generator_bits: str) -> dict:
     }
 
 
+def _read_edge(text):
+    """'A-B:2', 'R-1->R-2:3' or 'R-1 R-2:3' -> ('A', 'B', 2.0)."""
+    pair, cost = text.rsplit(":", 1)
+    pair = pair.strip()
+    if "->" in pair:
+        parts = pair.split("->")
+    elif " " in pair:
+        parts = pair.split()
+    else:
+        parts = pair.split("-")
+    if len(parts) != 2 or not all(p.strip() for p in parts):
+        raise ValueError(text)
+    return parts[0].strip(), parts[1].strip(), float(cost)
+
+
+def _add_link(graph, a, b, cost):
+    """Keep the cheapest cost when the same link is given more than once."""
+    links = graph.setdefault(a, {})
+    links[b] = min(cost, links.get(b, cost))
+
+
 def dijkstra_shortest_paths(edges: list[str], source: str, directed: bool = False) -> dict:
     """Run Dijkstra's shortest-path algorithm on a network graph.
     edges: the links, each written as 'A-B:cost', for example ['A-B:2', 'A-C:5', 'B-C:1'].
+    Node names that contain a hyphen (R-1) can be written 'R-1->R-2:3' or 'R-1 R-2:3'.
+    If the same link is given twice, the cheaper cost is used.
     source: the starting node, for example 'A'.
     directed: False (default) means every link works in both directions.
     Returns the shortest distance and path to every node, the order in which
@@ -66,19 +89,18 @@ def dijkstra_shortest_paths(edges: list[str], source: str, directed: bool = Fals
     graph = {}
     for e in edges:
         try:
-            pair, cost = e.split(":")
-            a, b = [x.strip() for x in pair.split("-")]
-            cost = float(cost)
+            a, b, cost = _read_edge(e)
         except ValueError:
-            return {"error": f"Bad edge '{e}'. Use the format 'A-B:cost', for example 'A-B:2'."}
+            return {"error": f"Bad edge '{e}'. Use the format 'A-B:cost', for example 'A-B:2' "
+                             "(or 'R-1->R-2:3' when names contain a hyphen)."}
         if cost < 0:
             return {"error": "Dijkstra's algorithm needs costs that are not negative."}
         if cost.is_integer():
             cost = int(cost)
-        graph.setdefault(a, {})[b] = cost
+        _add_link(graph, a, b, cost)
         graph.setdefault(b, {})
         if not directed:
-            graph[b][a] = cost
+            _add_link(graph, b, a, cost)
     source = source.strip()
     if source not in graph:
         return {"error": f"Source node '{source}' is not in the graph: {list(graph)}"}

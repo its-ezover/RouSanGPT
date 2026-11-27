@@ -1,5 +1,8 @@
 import ipaddress
+import itertools
 import math
+
+MAX_LISTED_SUBNETS = 64
 
 
 def subnet_info(cidr: str) -> dict:
@@ -30,7 +33,8 @@ def subnet_info(cidr: str) -> dict:
 def split_into_subnets(cidr: str, number_of_subnets: int) -> dict:
     """Split an IPv4 network into equal-sized subnets. The number of subnets must
     be a power of 2 (2, 4, 8, 16, ...). Example: cidr='192.168.1.0/24',
-    number_of_subnets=4. Returns the list of subnets with their ranges."""
+    number_of_subnets=4. Returns the list of subnets with their ranges (the first 64
+    when there are more: 'truncated' then says so, and total_subnets gives the count)."""
     try:
         net = ipaddress.IPv4Network(cidr, strict=False)
     except ValueError as e:
@@ -41,10 +45,15 @@ def split_into_subnets(cidr: str, number_of_subnets: int) -> dict:
     new_prefix = net.prefixlen + extra_bits
     if new_prefix > 32:
         return {"error": "Not enough address bits to make that many subnets"}
-    subnets = []
-    for sub in list(net.subnets(new_prefix=new_prefix))[:64]:
-        subnets.append(subnet_info(str(sub)))
-    return {"new_prefix_length": new_prefix, "subnets": subnets}
+    # islice: only the subnets that are shown are ever made (2^24 of them would not fit)
+    subnets = [subnet_info(str(sub)) for sub in
+               itertools.islice(net.subnets(new_prefix=new_prefix), MAX_LISTED_SUBNETS)]
+    result = {"new_prefix_length": new_prefix, "total_subnets": number_of_subnets,
+              "subnets": subnets, "truncated": number_of_subnets > MAX_LISTED_SUBNETS}
+    if result["truncated"]:
+        result["note"] = (f"Only the first {MAX_LISTED_SUBNETS} of {number_of_subnets} subnets are "
+                          "listed. Each one holds the same number of addresses.")
+    return result
 
 
 def delay_calculation(packet_size_bits: float, link_rate_bps: float,
@@ -56,6 +65,8 @@ def delay_calculation(packet_size_bits: float, link_rate_bps: float,
     propagation_speed_mps: signal speed in meters/second (default 2e8, typical for cable).
     Returns transmission delay, propagation delay and their total, in milliseconds.
     Queuing and processing delays are not included."""
+    if link_rate_bps <= 0 or propagation_speed_mps <= 0:
+        return {"error": "link_rate_bps and propagation_speed_mps must be greater than 0."}
     transmission = packet_size_bits / link_rate_bps
     propagation = distance_m / propagation_speed_mps
     return {
@@ -69,6 +80,8 @@ def bandwidth_delay_product(link_rate_bps: float, propagation_delay_s: float) ->
     """Calculate the bandwidth-delay product: the maximum number of bits that can
     be 'in flight' on a link. link_rate_bps is in bits per second and
     propagation_delay_s is the one-way propagation delay in SECONDS."""
+    if link_rate_bps < 0 or propagation_delay_s < 0:
+        return {"error": "link_rate_bps and propagation_delay_s cannot be negative."}
     bits = link_rate_bps * propagation_delay_s
     return {"bits_in_flight": bits, "bytes_in_flight": bits / 8}
 
