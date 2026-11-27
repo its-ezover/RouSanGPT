@@ -236,5 +236,50 @@ check("busy for too long: a friendly message, not the raw error",
 reply, _, _, _ = chat_with([BAD])
 check("a wrong key in a chat says so", "API key is not valid" in reply)
 
+# ---- cryptography tools: the worked examples from the course slides ----
+import cipher_tools as ct  # noqa: E402
+import finite_field_tools as ff  # noqa: E402
+import number_theory_tools as nt  # noqa: E402
+
+r = nt.extended_euclid(1759, 550)
+check("extended Euclid: 1759x + 550y = 1 gives x = -111, y = 355",
+      (r["gcd"], r["x"], r["y"]) == (1, -111, 355))
+check("the inverse of 11 in Z26 is 19", nt.modular_inverse(11, 26)["inverse"] == 19)
+check("6 has no inverse mod 26", nt.modular_inverse(6, 26)["has_inverse"] is False)
+check("20^62 mod 77 = 15 and 8^-1 mod 17 = 15",
+      nt.modular_power(20, 62, 77)["result"] == 15 and nt.modular_power(8, -1, 17)["result"] == 15)
+r = nt.miller_rabin_test(1729, [671])
+check("Miller-Rabin: 1729 with a = 671 is composite (k = 6, q = 27)",
+      (r["k"], r["q"]) == (6, 27) and r["conclusion"].startswith("composite"))
+check("phi(21) = 12", nt.euler_totient(21)["phi"] == 12)
+check("CRT: x = 2 mod 3, 3 mod 5, 2 mod 7 gives 23", nt.chinese_remainder([2, 3, 2], [3, 5, 7])["x"] == 23)
+check("bad input gives an error message, not a crash", "error" in nt.modular_power("abc", 2, 5))
+r = ff.polynomial_arithmetic("x^3 + x^2 + 2", "x^2 - x + 1", "divide", 0)
+check("polynomial division: quotient x + 2, remainder x", (r["quotient"], r["remainder"]) == ("x + 2", "x"))
+check("x^3 + x + 1 is irreducible over GF(2)", ff.polynomial_arithmetic("x^3+x+1", "", "factor")["irreducible"])
+r = ff.gf2n_arithmetic("x^5 + x^2 + x", "x^7 + x^4 + x^3 + x^2 + x", "multiply")
+check("GF(2^8) product is x^5 + x^3 + x^2 + x + 1", r["result"]["polynomial"] == "x^5 + x^3 + x^2 + x + 1")
+check("in GF(2^8) the inverse of x^5 is x^5 + x^4 + x^3 + x",
+      ff.gf2n_arithmetic("x5", "", "inverse")["inverse"]["polynomial"] == "x^5 + x^4 + x^3 + x")
+check("Caesar: meet me after the toga party", ct.caesar_cipher("meet me after the toga party", 3)["result"]
+      == "PHHW PH DIWHU WKH WRJD SDUWB")
+check("Vigenere with key deceptive", ct.vigenere_cipher("we are discovered save yourself", "deceptive")["result"]
+      == "ZICVTWQNGRZGVTWAVZHCQYGLMGJ")
+check("Playfair with key monarchy", ct.playfair_cipher("move forward", "monarchy")["result"] == "ON UF PH NZ RM BZ")
+check("Hill cipher: paymoremoney", ct.hill_cipher("paymoremoney", "17 17 5 21 18 21 2 2 19")["result"]
+      == "RRLMWBKASPDH")
+check("Hill decryption gives the plaintext back",
+      ct.hill_cipher("RRLMWBKASPDH", "17 17 5 21 18 21 2 2 19", "decrypt")["result"] == "paymoremoney")
+check("rail fence of depth 2", ct.rail_fence_cipher("meet me after the toga party", 2)["result"]
+      == "MEMATRHTGPRYETEFETEOAAT")
+check("row transposition with key 4312567",
+      ct.row_transposition_cipher("attack postponed until two am", "4312567", padding="xyz")["result"]
+      == "TTNAAPTMTSUOAODWCOIXKNLYPETZ")
+check("Caesar brute force finds key 3",
+      ct.caesar_cipher("PHHW PH DIWHU WKH WRJD SDUWB", mode="brute_force")["most_likely"][0]["key"] == 3)
+check("crypto lecture PDFs count as slides, homework PDFs do not",
+      knowledge.classify("Ch02-Number Theory.pdf") == "slides" and knowledge.classify("Ch3 HW.pdf") == "homework"
+      and knowledge.classify("Ch1_suggested_solution.pdf") == "answers")
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

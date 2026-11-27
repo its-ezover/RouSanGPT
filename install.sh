@@ -198,8 +198,8 @@ cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Type=Application
 Name=RouSanGPT
-GenericName=Computer Networks Tutor
-Comment=AI tutor for Computer Networks: explanations, quizzes, diagrams and videos
+GenericName=Computer Networks and Cryptography Tutor
+Comment=AI tutor for Computer Networks and Cryptography: explanations, quizzes, diagrams and videos
 Exec="$LAUNCHER"
 Icon=rousangpt
 Terminal=false

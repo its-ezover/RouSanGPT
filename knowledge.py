@@ -3,6 +3,7 @@
 Shared by the tutor (agent.py), quizzes and videos, so that they all see the same
 files, including the ones added in the app while it runs.
 """
+import re
 import threading
 
 import chromadb
@@ -36,6 +37,8 @@ def classify(name):
         return "answers"
     if any(w in n for w in HOMEWORK_WORDS):
         return "homework"
+    if n.endswith(".pdf") and re.match(r"ch(apter)?[\s_-]*\d", n):
+        return "slides"                  # lecture slides saved as PDF, e.g. 'Ch02-Number Theory.pdf'
     return "other"
 
 

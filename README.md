@@ -1,12 +1,13 @@
-# RouSanGPT - Computer Networks AI Teaching Assistant
+# RouSanGPT - Computer Networks and Cryptography AI Teaching Assistant
 
 <p align="center"><img src="web/logo.png" alt="RouSanGPT logo" width="160"></p>
 
 Course project for **NES 312 Computer Networks** (Instructor: Dr. Rousan).
 Author: AbdulAzez Sawalma
 
-RouSanGPT is an AI teaching assistant for Computer Networks. It answers from your
-course materials (slides, books, homework), calculates networking problems exactly,
+RouSanGPT is an AI teaching assistant for Computer Networks and for Cryptography and
+Network Security. It answers from your course materials (slides, books, homework),
+calculates networking and cryptography problems exactly,
 draws diagrams, plays animations, makes narrated videos, runs quizzes, and
 understands voice questions in English and Arabic. It runs as a desktop app on
 **Linux** and **Windows**, as a web app in the browser, or in the terminal, and it
@@ -36,6 +37,16 @@ is built only with free tools.
 - **Exact calculators:** subnetting (CIDR), transmission and propagation delays,
   bandwidth-delay product, CRC, Internet checksum, Dijkstra's shortest paths and a
   safe general calculator, so the AI never guesses numbers.
+- **Cryptography solvers:** number theory (Euclid and extended Euclid tables,
+  modular inverse, fast modular powers with Fermat/Euler, Euler's totient, prime
+  factors, Miller-Rabin, Chinese Remainder Theorem, linear congruences, primitive
+  roots, discrete logarithms, Zn tables), finite fields (polynomial arithmetic
+  over GF(p), irreducibility, polynomial GCD, GF(2^n) multiply and inverse, AES's
+  GF(2^8) by default), classical ciphers (Caesar with brute force, affine,
+  monoalphabetic, frequency analysis, Vigenere and autokey, Playfair, Hill,
+  Vernam / one-time pad, rail fence, row transposition) and block cipher sizes and
+  brute-force times. Each one shows its working in the same table form the
+  slides use.
 - **Your own formula tools:** describe a formula in plain English or Arabic and the
   AI fills in a tool for you; the tutor then uses it in its answers.
 - **Diagrams:** message-sequence diagrams (TCP handshake, DNS, HTTP...), network
@@ -377,6 +388,9 @@ other computers on the network cannot reach it.
 | Subnetting and delays (`tools.py`) | `subnet_info`, `split_into_subnets`, `delay_calculation`, `bandwidth_delay_product` |
 | Error detection and routing (`more_tools.py`) | `crc_calculate`, `crc_check`, `dijkstra_shortest_paths` |
 | Checksums and arithmetic (`extra_tools.py`) | `internet_checksum_calculate`, `internet_checksum_verify`, `calculator` (safe, no code execution) |
+| Number theory (`number_theory_tools.py`) | `gcd_euclid`, `extended_euclid`, `modular_inverse`, `modular_power`, `euler_totient`, `prime_factorization`, `miller_rabin_test`, `chinese_remainder`, `solve_linear_congruence`, `primitive_roots`, `discrete_logarithm`, `modular_tables` |
+| Finite fields (`finite_field_tools.py`) | `polynomial_arithmetic` (add, subtract, multiply, divide, gcd, factor over GF(p) or ordinary), `gf2n_arithmetic` (add, multiply, inverse, divide in GF(2^n)) |
+| Classical and block ciphers (`cipher_tools.py`) | `caesar_cipher`, `affine_cipher`, `monoalphabetic_cipher`, `letter_frequency`, `vigenere_cipher`, `playfair_cipher`, `hill_cipher`, `vernam_xor`, `rail_fence_cipher`, `row_transposition_cipher`, `block_cipher_sizes`, `brute_force_time` |
 | Diagrams (`diagram_tools.py`) | `draw_topology` (Graphviz), `draw_sequence_diagram` and `draw_packet_header` (matplotlib) |
 | Animations (`animation_tools.py`) | `animate_message_exchange`, `animate_packet_flow`, `animate_sliding_window`, `animate_dijkstra` |
 | Videos (`video_tools.py`) | `create_video` |
@@ -541,6 +555,7 @@ with the install command instead of a crash.
 | `ingest_lib.py`, `ingest.py` | reading course files into the search database |
 | `formula_tools.py` | user formula tools: safe evaluator, AI drafts, turning formulas into tools |
 | `tools.py`, `more_tools.py`, `extra_tools.py` | exact networking calculators |
+| `number_theory_tools.py`, `finite_field_tools.py`, `cipher_tools.py` | exact cryptography solvers |
 | `diagram_tools.py` | diagrams |
 | `animation_tools.py` | animation engine |
 | `video_tools.py` | narrated video generator |

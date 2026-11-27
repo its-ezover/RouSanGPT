@@ -21,9 +21,12 @@ import diagram_tools
 import formula_tools
 import video_tools
 from animation_tools import ANIMATION_TOOLS
+from cipher_tools import CIPHER_TOOLS
 from diagram_tools import DIAGRAM_TOOLS
 from extra_tools import EXTRA_TOOLS
+from finite_field_tools import FINITE_FIELD_TOOLS
 from more_tools import MORE_TOOLS
+from number_theory_tools import NUMBER_THEORY_TOOLS
 from quiz import QUIZ_TOOLS
 from tools import ALL_TOOLS
 from video_tools import VIDEO_TOOLS
@@ -47,13 +50,17 @@ SOURCES = knowledge.SOURCES
 refresh_sources = knowledge.refresh_sources
 warm_up = knowledge.warm_up
 
-TUTOR_PERSONALITY = """You are RouSanGPT, a friendly and encouraging Computer Networks
-teaching assistant. Explain things simply, with small examples.
+TUTOR_PERSONALITY = """You are RouSanGPT, a friendly and encouraging teaching assistant
+for two courses: Computer Networks, and Cryptography and Network Security (number
+theory, classical ciphers, block ciphers, finite fields). Explain things simply,
+with small examples.
 
 FORMATTING: your answers are shown in a chat app that understands simple Markdown:
 **bold**, bullet lists starting with "- ", numbered lists, and code blocks for packet
 captures. Do NOT use tables, LaTeX or dollar signs. Write formulas in plain text, for
-example: T = st + N * (L/R + M/S). Keep answers clear and not too long.
+example: T = st + N * (L/R + M/S), a^-1 mod n, x^8 + x^4 + x^3 + x + 1. Show
+step tables (extended Euclidean algorithm, GF(2^n) inverse, cipher grids) inside a
+code block with aligned columns. Keep answers clear and not too long.
 
 LANGUAGE (very important): answer in the language of the student's LATEST message.
 - If the latest message is in English, answer in English, even if earlier messages
@@ -63,7 +70,9 @@ LANGUAGE (very important): answer in the language of the student's LATEST messag
   "هسا", "هيك", "كتير", "بدّك", "مش", "ليش", "تمام". Keep it friendly, clear and
   respectful, and do not overdo slang. Keep networking terms in English letters as
   they are used in class (TCP, router, IP address, subnet mask), with a short Arabic
-  explanation the first time. Numbers and formulas stay in English characters.
+  explanation the first time. The same goes for cryptography terms (plaintext,
+  ciphertext, key, modular inverse, GF(2^8)). Numbers and formulas stay in English
+  characters.
 - The hint-mode rules apply in both languages.
 
 Each student message comes with excerpts from the course materials. They are
@@ -113,7 +122,21 @@ Outside HINT MODE (concept questions, studying, general examples) answer fully
 and use your tools freely.
 
 For any calculation (subnetting, delays, bandwidth-delay product, CRC, Internet
-checksum, shortest paths), always use your tools. For any other arithmetic
+checksum, shortest paths), always use your tools.
+Cryptography has its own exact tools, and they show the working the way the slides
+do: gcd_euclid, extended_euclid, modular_inverse, modular_power (also Fermat and
+Euler), euler_totient, prime_factorization, miller_rabin_test, chinese_remainder,
+solve_linear_congruence, primitive_roots, discrete_logarithm, modular_tables (Zn
+tables, is it a field); polynomial_arithmetic (over GF(p) or ordinary: add, subtract,
+multiply, divide, gcd, factor / irreducible) and gf2n_arithmetic (GF(2^n) add,
+multiply, inverse, divide; the AES modulus is the default); caesar_cipher (also
+brute force), affine_cipher, monoalphabetic_cipher, letter_frequency,
+vigenere_cipher (also autokey), playfair_cipher, hill_cipher, vernam_xor (one-time
+pad), rail_fence_cipher, row_transposition_cipher, block_cipher_sizes and
+brute_force_time. Never encrypt, decrypt or do modular arithmetic in your head: a
+single wrong letter or number ruins the answer. Explain the tool's steps to the
+student. If the student's convention differs from the tool's (for example Hill
+cipher row or column vectors, or the filler letter), say which one you used. For any other arithmetic
 (throughput, utilization, RTT, unit conversions) use the calculator tool. Custom
 formula tools added in the Tools panel may also be available: use them whenever
 one matches the question. Never calculate in your head. Use the tool result to
@@ -153,7 +176,8 @@ diagram that you did not just create with a tool."""
 
 # ---- Tools (built-in ones plus formula tools added in the app) ----
 BASE_TOOLS = (ALL_TOOLS + MORE_TOOLS + DIAGRAM_TOOLS + QUIZ_TOOLS + EXTRA_TOOLS
-              + VIDEO_TOOLS + ANIMATION_TOOLS)
+              + VIDEO_TOOLS + ANIMATION_TOOLS
+              + NUMBER_THEORY_TOOLS + FINITE_FIELD_TOOLS + CIPHER_TOOLS)
 TOOLS_VERSION = 0
 CONFIG = None
 TOOL_MAP = {}
@@ -344,7 +368,7 @@ def find_existing_video(question):
 LANGUAGE_NOTES = {
     "english": "Reply language: English only. Do not use Arabic.",
     "arabic": "Reply language: Arabic, in the Jordanian dialect, keeping networking "
-              "terms in English letters.",
+              "and cryptography terms in English letters.",
     "auto": "Reply language: the same language as the student's message above.",
 }
 
@@ -502,7 +526,7 @@ class Session:
         if not found:
             context = ("(No course material matched this question"
                        + (", because no course files have been added yet" if not collection.count() else "")
-                       + ". Answer from your general Computer Networks knowledge and say briefly "
+                       + ". Answer from your general Computer Networks or Cryptography knowledge and say briefly "
                        "that this answer is not based on the course materials.)")
         prompt = (f"Course material excerpts:\n{context}\n\n"
                   f"Student message: {question}\n\n({note})")

@@ -19,7 +19,7 @@ AppVerName=RouSanGPT {#AppVersion}
 VersionInfoVersion={#AppVersion}
 AppPublisher=AbdulAzez Sawalma
 AppPublisherURL=https://github.com/its-ezover/RouSanGPT
-AppComments=Computer Networks AI teaching assistant
+AppComments=Computer Networks and Cryptography AI teaching assistant
 DefaultDirName={localappdata}\Programs\RouSanGPT
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -55,9 +55,9 @@ Name: "{#DataDir}"; Flags: uninsneveruninstall
 [Icons]
 ; pythonw.exe: no black console window
 Name: "{autoprograms}\RouSanGPT"; Filename: "{app}\python\pythonw.exe"; Parameters: "-X utf8 ""{app}\app\launcher.py"" --data-dir ""{localappdata}\RouSanGPT\data"""; \
-  WorkingDir: "{app}\app"; IconFilename: "{app}\app\icons\rousangpt.ico"; Comment: "RouSanGPT - Computer Networks tutor"
+  WorkingDir: "{app}\app"; IconFilename: "{app}\app\icons\rousangpt.ico"; Comment: "RouSanGPT - Networks and Cryptography tutor"
 Name: "{autodesktop}\RouSanGPT"; Filename: "{app}\python\pythonw.exe"; Parameters: "-X utf8 ""{app}\app\launcher.py"" --data-dir ""{localappdata}\RouSanGPT\data"""; \
-  WorkingDir: "{app}\app"; IconFilename: "{app}\app\icons\rousangpt.ico"; Comment: "RouSanGPT - Computer Networks tutor"; \
+  WorkingDir: "{app}\app"; IconFilename: "{app}\app\icons\rousangpt.ico"; Comment: "RouSanGPT - Networks and Cryptography tutor"; \
   Tasks: desktopicon
 
 [Run]
