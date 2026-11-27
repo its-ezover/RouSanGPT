@@ -19,6 +19,7 @@ import formula_tools
 import gemini_client
 import history_store
 import ingest_lib
+import recipes
 import knowledge
 import local_ai
 import settings
@@ -46,8 +47,9 @@ async def only_this_computer(request: Request, call_next):
     if origin is not None and origin.lower() not in (f"http://{host}".lower(), f"https://{host}".lower()):
         return JSONResponse({"detail": "Requests from other web sites are not allowed."}, status_code=403)
     response = await call_next(request)
-    if request.url.path == "/" or request.url.path.startswith("/static/"):
-        # always check for a newer page, so an updated app never shows an old one
+    if request.url.path == "/" or request.url.path.startswith(("/static/", "/files/")):
+        # always check for a newer copy: an updated app never shows an old page, and a
+        # picture or video redrawn in another look (same name) shows the new one
         response.headers["Cache-Control"] = "no-cache"
     return response
 
@@ -472,6 +474,20 @@ def get_settings():
             "look": s.get("look", "classic"),
             "local_model": agent.local_model(), "app_mode": lifecycle.app_mode,
             "data_dir": str(DATA_DIR)}
+
+
+@app.post("/api/redraw")
+def start_redraw():
+    """Settings > Look: redraw the pictures, animations and videos in the chosen look."""
+    started = recipes.start()
+    if started is None:
+        raise HTTPException(409, "Already redrawing. Please wait for it to finish.")
+    return started
+
+
+@app.get("/api/redraw")
+def redraw_status():
+    return dict(recipes.state)
 
 
 @app.post("/api/settings/key")

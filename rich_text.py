@@ -89,22 +89,32 @@ def width(d, text, size, bold=False):
     return sum(d.textlength(t, font=_font(size, bold, lv)) for t, lv in parts(str(text)))
 
 
-def draw(d, xy, text, size, color, bold=False, anchor="mm"):
-    """Draw text at xy with anchor 'mm' (centre), 'lm' (left) or 'rm' (right)."""
+def draw(d, xy, text, size, color, bold=False, anchor="mm", font_fn=None, stroke_width=0, stroke_fill=None):
+    """Draw text at xy. anchor: 'mm' (centre), 'lm' (left), 'rm' (right), all on the
+    middle of the line, or 'la' (left, top of the line, like a title). font_fn(size,
+    bold) picks another font (the monospace titles); stroke_* outline the letters."""
     text = str(text)
     x, y = xy
+    fnt = font_fn or font
+    extra = {"stroke_width": stroke_width, "stroke_fill": stroke_fill} if stroke_width else {}
     if not needs(text):
-        d.text((x, y), text, font=font(size, bold), fill=color, anchor=anchor)
+        d.text((x, y), text, font=fnt(size, bold), fill=color, anchor=anchor, **extra)
         return
     pieces = parts(text)
-    total = sum(d.textlength(t, font=_font(size, bold, lv)) for t, lv in pieces)
+
+    def f_of(level):
+        return fnt(size if level == 0 else max(8, round(size * 0.64)), bold)
+
+    total = sum(d.textlength(t, font=f_of(lv)) for t, lv in pieces)
     x0 = x - total / 2 if anchor[0] == "m" else x - total if anchor[0] == "r" else x
-    ascent, descent = font(size, bold).getmetrics()
-    baseline = y + (ascent - descent) / 2
+    ascent, descent = fnt(size, bold).getmetrics()
+    baseline = y + ascent if anchor[1] == "a" else y + (ascent - descent) / 2
     for t, lv in pieces:
-        f = _font(size, bold, lv)
+        f = f_of(lv)
         shift = -size * 0.42 if lv == 1 else size * 0.2 if lv == -1 else 0
-        d.text((x0, baseline + shift), t, font=f, fill=color, anchor="ls")
+        sw = {"stroke_width": max(1, round(stroke_width * (0.7 if lv else 1))), "stroke_fill": stroke_fill} \
+            if stroke_width else {}
+        d.text((x0, baseline + shift), t, font=f, fill=color, anchor="ls", **sw)
         x0 += d.textlength(t, font=f)
 
 

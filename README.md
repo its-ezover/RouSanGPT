@@ -77,7 +77,9 @@ is built only with free tools.
     corners, glitch titles, a monospace font and glowing neon icons.
   - *Y2K*: holographic pastels with sparkles, chrome pill buttons, candy bubbles,
     rainbow headings and candy icons.
-  Pictures and videos already made keep the look they were made with.
+  Pictures, animations and videos already made can be redrawn in the chosen look
+  (Settings > Look > Redraw): each keeps a small recipe (`.recipe.json`) next to
+  it, and videos are made again from their saved script.
 - **Math that looks like math:** 2^k * q is shown with a raised k and a
   multiplication dot, a^(q*2^j) with a raised q·2^j, x_i with a lowered i, -> as an
   arrow, in the answers and in the pictures; read-aloud says "2 to the power k
@@ -601,7 +603,8 @@ with the install command instead of a crash.
 | `net_visuals.py`, `crypto_visuals.py` | the networking and cryptography figures |
 | `device_icons.py` | the device and security icons, and choosing one from a name |
 | `looks.py` | the looks: colours, backgrounds, titles, boxes and slide panels of each |
-| `rich_text.py` | math in the pictures: raised powers, lowered indices, multiplication dots |
+| `rich_text.py` | math in the pictures and titles: raised powers, lowered indices, multiplication dots |
+| `recipes.py` | redrawing pictures, animations and videos in another look |
 | `ui_icons.py`, `web/looks/` | the page's icons for the Aero, Cybercore and Y2K looks (`python ui_icons.py` makes them again) |
 | `video_tools.py` | narrated video generator |
 | `quiz.py` | quiz generator and answer checker |

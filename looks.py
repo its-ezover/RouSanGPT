@@ -215,23 +215,28 @@ def background(look=None, light=False):
 
 # ---------- titles ----------
 
-def title_text(d, xy, text, font, look=None, light=False):
-    """A title in the look's style: a glow, a chromatic split or a chrome outline."""
+def title_text(d, xy, text, size, look=None, light=False, font_fn=None):
+    """A title in the look's style (a glow, a chromatic split or a chrome outline), with
+    its math drawn as math: raised powers and lowered indices (rich_text)."""
+    from rich_text import draw
     look = look or current()
     x, y = xy
+
+    def put(dx, dy, color, **outline):
+        draw(d, (x + dx, y + dy), text, size, color, True, "la", font_fn, **outline)
+
     if look == "aero":
-        d.text((x + 2, y + 3), text, font=font, fill="#7fb4d6" if light else "#021627")
-        d.text((x, y), text, font=font, fill="#0b2a45" if light else "white")
+        put(2, 3, "#7fb4d6" if light else "#021627")
+        put(0, 0, "#0b2a45" if light else "white")
     elif look == "cybercore":
-        d.text((x - 3, y), text, font=font, fill="#ff00e5" if not light else "#e060ff")     # the glitch
-        d.text((x + 3, y), text, font=font, fill="#00f0ff" if not light else "#40c8e0")
-        d.text((x, y), text, font=font, fill="#ffffff" if not light else "#14082b")
+        put(-3, 0, "#ff00e5" if not light else "#e060ff")                  # the glitch
+        put(3, 0, "#00f0ff" if not light else "#40c8e0")
+        put(0, 0, "#ffffff" if not light else "#14082b")
     elif look == "y2k":
-        d.text((x + 3, y + 4), text, font=font, fill="#b98ce0" if light else "#0b0216")
-        d.text((x, y), text, font=font, fill="#ffffff", stroke_width=3,
-               stroke_fill="#e83fb0" if light else "#ff7ad9")
+        put(3, 4, "#b98ce0" if light else "#0b0216")
+        put(0, 0, "#ffffff", stroke_width=3, stroke_fill="#e83fb0" if light else "#ff7ad9")
     else:
-        d.text((x, y), text, font=font, fill="#0f172a" if light else "white")
+        put(0, 0, "#0f172a" if light else "white")
 
 
 def title(d, text, look=None, light=False):
@@ -252,11 +257,9 @@ def title(d, text, look=None, light=False):
         d.rectangle([0, 0, W, 3], fill="#ffffff")
     else:
         d.rectangle([0, 0, W, 12], fill="#0284c7" if light else "#38bdf8")
-    from rich_text import unicode
-    f = mono_font(40, True) if look == "cybercore" else font(42, True)
-    shown = unicode(text)[:48]                          # 2^k * q -> 2ᵏ · q
-    shown = shown.upper() if look == "cybercore" else shown
-    title_text(d, (80, 55), shown, f, look, light)
+    shown = text[:48]                     # never upper case: n and N are different in math
+    title_text(d, (80, 55), shown, 40 if look == "cybercore" else 42, look, light,
+               mono_font if look == "cybercore" else font)
 
 
 # ---------- boxes ----------

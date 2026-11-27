@@ -523,7 +523,7 @@
                                            filter:brightness(1.12); }
   :root[data-look="cybercore"] #send { background:var(--accent); color:var(--on-accent); border-radius:2px; box-shadow:0 0 14px var(--accent); }
   :root[data-look="cybercore"] #send:hover { background:var(--accent); filter:brightness(1.12); }
-  :root[data-look="cybercore"] #chatTitle, :root[data-look="cybercore"] .brand b { text-transform:uppercase; letter-spacing:.06em;
+  :root[data-look="cybercore"] #chatTitle, :root[data-look="cybercore"] .brand b { letter-spacing:.04em;
                                  text-shadow:-1px 0 var(--accent-2), 1px 0 var(--accent); }
   :root[data-look="cybercore"] .hero h2 { text-transform:uppercase; letter-spacing:.06em; text-shadow:-3px 0 var(--accent-2), 3px 0 var(--accent); }
   :root[data-look="cybercore"] .item.active { background:var(--surface-2); box-shadow:inset 3px 0 0 var(--accent); color:var(--text); }
@@ -2102,7 +2102,7 @@ async function openSettings(note) {
 
   // Look
   const lk = section("Look", "How the app, its icons, pictures, animations and videos look. Pictures and " +
-                     "videos you already made keep the look they were made with.");
+                     "videos you already made keep their look until you redraw them (below).");
   const look = selectBox(lk, "Style", [["classic", "Classic (flat)"], ["aero", "Frutiger Aero (glass and gloss)"],
                                        ["cybercore", "Cybercore (neon, grid and scanlines)"],
                                        ["y2k", "Y2K (chrome, holographic and sparkles)"]], s.look || "classic");
@@ -2115,6 +2115,41 @@ async function openSettings(note) {
       lmsg.className = "ok"; lmsg.textContent = "Saved.";
     } catch (e) { lmsg.className = "err"; lmsg.textContent = e.message; }
   };
+  // redraw what was made before in the chosen look (same files, so the chats show them)
+  const redrawRow = el("div", "btnrow");
+  const redrawBtn = el("button", "small", "Redraw my pictures and videos in this look");
+  const rmsg = el("p", "muted", "Videos take a minute or two each and need the internet for the voice.");
+  redrawRow.appendChild(redrawBtn);
+  lk.appendChild(redrawRow); lk.appendChild(rmsg);
+  async function followRedraw() {
+    redrawBtn.disabled = true;
+    while (true) {
+      let st;
+      try { st = await api("GET", "/api/redraw"); } catch (e) { rmsg.className = "err"; rmsg.textContent = e.message; break; }
+      if (st.running) {
+        rmsg.className = "muted";
+        rmsg.textContent = "Redrawing " + Math.min(st.done + 1, st.total) + " of " + st.total +
+                           (st.current ? ": " + st.current : "") + "...";
+        await sleep(1500);
+        continue;
+      }
+      rmsg.className = st.failed.length ? "err" : "ok";
+      rmsg.textContent = "Done: " + st.redrawn + " redrawn" +
+        (st.failed.length ? ", " + st.failed.length + " could not be (" + st.failed[0] + ")" : "") +
+        (st.older ? ". " + st.older + (st.older === 1 ? " older picture was made before redrawing existed and keeps its look."
+                                                       : " older pictures were made before redrawing existed and keep their look.")
+                  : ".");
+      if (currentChat && !busy) openChat(currentChat);     // show the new pictures
+      break;
+    }
+    redrawBtn.disabled = false;
+  }
+  redrawBtn.onclick = async function () {
+    try { await api("POST", "/api/redraw"); } catch (e) { if (e.message.indexOf("Already") === -1) {
+      rmsg.className = "err"; rmsg.textContent = e.message; return; } }
+    followRedraw();
+  };
+  api("GET", "/api/redraw").then(function (st) { if (st.running) followRedraw(); }).catch(function () {});
 
   // Local model
   const box = section("Local model (Ollama)", "Answers without the internet, on your own computer. Slower than Gemini and needs a few GB of disk space.");

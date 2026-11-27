@@ -2,6 +2,7 @@ import math
 import re
 import subprocess
 import tempfile
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,6 +17,9 @@ W, H, FPS = 1280, 720, 30
 BG = "#0f172a"
 PALETTE = ["#38bdf8", "#a78bfa", "#f472b6", "#fb923c", "#facc15", "#4ade80"]
 _CAPTURE = None   # video_tools uses this to borrow the drawing code
+# Taken while a video borrows the drawing code, and by Settings > Look's redraw, so the
+# two never use "capture" mode at the same time
+RENDER_LOCK = threading.RLock()
 
 # ---------- Drawing helpers ----------
 

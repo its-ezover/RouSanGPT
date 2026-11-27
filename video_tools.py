@@ -1,3 +1,4 @@
+import json
 import re
 import tempfile
 import textwrap
@@ -233,15 +234,12 @@ def _draw_slide_classic(title, bullets, number, total, out_path, diagram_png=Non
     img = Image.new("RGB", (W, H), "#0f172a")
     d = ImageDraw.Draw(img)
     regular = animation_tools.font_path()
-    bold = animation_tools.font_path(bold=True)
-    f_title = ImageFont.truetype(bold, 46 if diagram_png else 54)
-    f_body = ImageFont.truetype(regular, 36)
     f_small = ImageFont.truetype(regular, 22)
 
     d.rectangle([0, 0, W, 12], fill="#38bdf8")
     y = 60 if diagram_png else 70
-    for line in textwrap.wrap(rich.unicode(title), width=34 if diagram_png else 30)[:2]:
-        d.text((80, y), line, font=f_title, fill="white")
+    for line in textwrap.wrap(title, width=34 if diagram_png else 30)[:2]:
+        rich.draw(d, (80, y), line, 46 if diagram_png else 54, "white", True, "la")   # math as math
         y += 58 if diagram_png else 66
 
     if diagram_png:
@@ -256,8 +254,8 @@ def _draw_slide_classic(title, bullets, number, total, out_path, diagram_png=Non
         y += 30
         for bullet in bullets[:5]:
             d.ellipse([80, y + 14, 94, y + 28], fill="#38bdf8")
-            for line in textwrap.wrap(rich.unicode(bullet), width=46)[:2]:
-                d.text((115, y), line, font=f_body, fill="#e2e8f0")
+            for line in textwrap.wrap(bullet, width=46)[:2]:
+                rich.draw(d, (115, y + 21), line, 36, "#e2e8f0", False, "lm")
                 y += 48
             y += 18
 
@@ -285,17 +283,15 @@ def _draw_slide_styled(title, bullets, number, total, out_path, diagram_png=None
         img = looks.panel(img, [60, 215, 1220, 640], look)
     d = ImageDraw.Draw(img)
     regular = animation_tools.font_path()
-    bold = animation_tools.font_path(bold=True)
-    f_title = (animation_tools.mono_font(42 if diagram_png else 50, True) if look == "cybercore"
-               else ImageFont.truetype(bold, 46 if diagram_png else 54))
     f_small = ImageFont.truetype(regular, 22)
 
     looks.title(d, "", look, False)                     # the look's top bar
     y = 60 if diagram_png else 70
-    shown = rich.unicode(title)                         # 2^k * q -> 2ᵏ · q
-    shown = shown.upper() if look == "cybercore" else shown
+    shown = title                         # never upper case: n and N are different in math
+    size = (42 if diagram_png else 50) if look == "cybercore" else (46 if diagram_png else 54)
     for line in textwrap.wrap(shown, width=34 if diagram_png else 30)[:2]:
-        looks.title_text(d, (80, y), line, f_title, look, False)
+        looks.title_text(d, (80, y), line, size, look, False,
+                         animation_tools.mono_font if look == "cybercore" else animation_tools.font)
         y += 58 if diagram_png else 66
 
     if diagram_png:
@@ -358,6 +354,57 @@ def _make_clip(i, scene, animation, diagram_png, total, tmp):
     return clip
 
 
+def _render(scenes, out_file):
+    """Make the MP4 of these scenes in the chosen look (raises when it cannot)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        # 1. pictures and animations, one scene after the other (the drawing tools
+        #    are switched into "capture" mode for this, which is not thread-safe)
+        plans = []
+        with animation_tools.RENDER_LOCK:
+            for i, scene in enumerate(scenes, start=1):
+                animation = make_scene_animation(scene)
+                diagram_png = None if animation else make_scene_diagram(scene, i)
+                kind = scene.diagram_type if (animation or diagram_png) else "bullets"
+                print(f"  (scene {i}/{len(scenes)}: {scene.title} [{kind}])", flush=True)
+                plans.append((i, scene, animation, diagram_png))
+        # 2. voice and video of several scenes at the same time: they mostly wait
+        #    for the voice service and for FFmpeg. Same clips, in the same order.
+        with ThreadPoolExecutor(max_workers=SCENE_WORKERS) as pool:
+            clips = list(pool.map(lambda plan: _make_clip(*plan, len(scenes), tmp), plans))
+
+        print("  (joining the scenes...)", flush=True)
+        list_file = tmp / "list.txt"
+        # names only: the clips are next to the list (Windows paths would need escaping)
+        list_file.write_text("".join(f"file '{Path(c).name}'\n" for c in clips), encoding="utf-8")
+        _ffmpeg(["-f", "concat", "-safe", "0", "-i", str(list_file),
+                 "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                 "-c:a", "aac", "-ar", "44100", "-ac", "2", str(out_file)])
+
+
+_BLANK_SCENE = {name: ([] if "list" in str(f.annotation) else 0 if f.annotation is int else "")
+                for name, f in Scene.model_fields.items()}
+
+
+def redraw_video(script_path):
+    """Make a saved video again from its script (videos/name.json), in the look chosen
+    now. The new video replaces the old one only when it is complete."""
+    script_path = Path(script_path)
+    data = json.loads(script_path.read_text(encoding="utf-8"))
+    for scene in data.get("scenes", []):          # scripts from before a field existed
+        for name, blank in _BLANK_SCENE.items():
+            scene.setdefault(name, blank)
+    board = Storyboard.model_validate(data)
+    out_file = script_path.with_suffix(".mp4")
+    temp = out_file.with_name(out_file.stem + ".redraw.mp4")
+    try:
+        _render(board.scenes, temp)
+        temp.replace(out_file)
+    finally:
+        temp.unlink(missing_ok=True)
+    return {"saved_to": str(out_file)}
+
+
 def create_video(topic: str, num_scenes: int = 5) -> dict:
     """Create a short narrated educational video (an MP4 file) about a Computer
     Networks or Cryptography topic, based on the course materials. Scenes can be
@@ -380,29 +427,7 @@ def create_video(topic: str, num_scenes: int = 5) -> dict:
     out_file = Path("videos") / f"{safe}_{int(time.time())}.mp4"
 
     try:
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            # 1. pictures and animations, one scene after the other (the drawing tools
-            #    are switched into "capture" mode for this, which is not thread-safe)
-            plans = []
-            for i, scene in enumerate(scenes, start=1):
-                animation = make_scene_animation(scene)
-                diagram_png = None if animation else make_scene_diagram(scene, i)
-                kind = scene.diagram_type if (animation or diagram_png) else "bullets"
-                print(f"  (scene {i}/{len(scenes)}: {scene.title} [{kind}])", flush=True)
-                plans.append((i, scene, animation, diagram_png))
-            # 2. voice and video of several scenes at the same time: they mostly wait
-            #    for the voice service and for FFmpeg. Same clips, in the same order.
-            with ThreadPoolExecutor(max_workers=SCENE_WORKERS) as pool:
-                clips = list(pool.map(lambda plan: _make_clip(*plan, len(scenes), tmp), plans))
-
-            print("  (joining the scenes...)", flush=True)
-            list_file = tmp / "list.txt"
-            # names only: the clips are next to the list (Windows paths would need escaping)
-            list_file.write_text("".join(f"file '{Path(c).name}'\n" for c in clips), encoding="utf-8")
-            _ffmpeg(["-f", "concat", "-safe", "0", "-i", str(list_file),
-                     "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                     "-c:a", "aac", "-ar", "44100", "-ac", "2", str(out_file)])
+        _render(scenes, out_file)
     except Exception as e:
         return {"error": f"The video could not be made: {e}"}
 

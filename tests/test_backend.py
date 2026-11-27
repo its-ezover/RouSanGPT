@@ -525,5 +525,36 @@ check("pictures: file names, *italics* and the *** of an address range stay as t
 check("titles: 2^k * q becomes 2ᵏ · q", rich_text.unicode("n - 1 = 2^k * q") == "n - 1 = 2ᵏ · q")
 check("read-aloud says the math", server.clean_for_speech("2^k * q") == "2 to the power k times q")
 
+# ---- titles show math as math; redrawing in another look ----
+import json  # noqa: E402
+import time  # noqa: E402
+
+import recipes  # noqa: E402
+from PIL import Image, ImageDraw  # noqa: E402
+
+canvas_img = Image.new("RGB", (900, 120), "black")
+d_title = ImageDraw.Draw(canvas_img)
+looks.title_text(d_title, (10, 10), "a^(q*2^j) mod n", 42, "cybercore", False, animation_tools.mono_font)
+check("a title with a power that has no Unicode form (q) is still drawn (raised)",
+      canvas_img.getbbox() is not None and rich_text.needs("a^(q*2^j)"))
+check("Cybercore titles keep the case of the math (n stays n)",
+      "upper()" not in Path(looks.__file__).read_text(encoding="utf-8").split("def title(")[1].split("def box(")[0])
+server.change_settings(server.SettingsRequest(look="classic"))
+made = agent.TOOL_MAP["draw_explainer"]("playfair", [], "")
+recipe_file = recipes.recipe_path(made["saved_to"])
+check("a picture the tutor draws keeps its recipe", recipe_file.exists()
+      and json.loads(recipe_file.read_text())["tool"] == "draw_explainer")
+old_picture = Path(made["saved_to"]).read_bytes()
+server.change_settings(server.SettingsRequest(look="y2k"))
+recipes.start()
+for _ in range(120):
+    if not recipes.state["running"]:
+        break
+    time.sleep(0.5)
+check("redraw: the picture is drawn again in the new look (same file)",
+      recipes.state["redrawn"] >= 1 and Path(made["saved_to"]).read_bytes() != old_picture)
+check("the redraw status can be read by the page", server.redraw_status()["running"] is False)
+server.change_settings(server.SettingsRequest(look="classic"))
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

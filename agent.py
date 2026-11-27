@@ -14,6 +14,7 @@ from google.genai import types
 import gemini_client
 import knowledge
 import quiz
+import recipes
 import settings
 
 import animation_tools
@@ -207,8 +208,9 @@ chat. Never say that it was already made, and never describe a video, animation 
 diagram that you did not just create with a tool."""
 
 # ---- Tools (built-in ones plus formula tools added in the app) ----
-BASE_TOOLS = (ALL_TOOLS + MORE_TOOLS + DIAGRAM_TOOLS + QUIZ_TOOLS + EXTRA_TOOLS
-              + VIDEO_TOOLS + ANIMATION_TOOLS + EXPLAINER_TOOLS
+# the drawing tools keep a recipe next to each picture, so Settings > Look can redraw it
+_DRAWING = [recipes.remember(f) for f in DIAGRAM_TOOLS + ANIMATION_TOOLS + EXPLAINER_TOOLS]
+BASE_TOOLS = (ALL_TOOLS + MORE_TOOLS + QUIZ_TOOLS + EXTRA_TOOLS + VIDEO_TOOLS + _DRAWING
               + NUMBER_THEORY_TOOLS + FINITE_FIELD_TOOLS + CIPHER_TOOLS)
 TOOLS_VERSION = 0
 CONFIG = None
