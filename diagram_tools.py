@@ -1,8 +1,11 @@
+import html
+import re
 import subprocess
 import textwrap
 from pathlib import Path
 
 import binaries
+import device_icons
 
 
 def _clean_name(name):
@@ -15,6 +18,56 @@ def _open_image(path):
     binaries.open_file(path)
 
 
+_DOT_WORDS = {"graph", "digraph", "subgraph", "node", "edge", "strict"}
+_ID = r'"(?:[^"\\]|\\.)*"|[A-Za-z_\x80-\uffff][\w.\x80-\uffff]*|-?\d+(?:\.\d+)?'
+
+
+def _with_icons(dot_code):
+    """The same DOT code with a device icon (and the name under it) for every node
+    whose name looks like a device: PC1, R1, Switch, Internet, DNS server... In a
+    routing graph (links with costs), short names such as u or A become routers.
+    Flowchart nodes (with their own shape, or long text) are left as they are."""
+    if re.search(r"\bnode\s*\[[^\]]*\bshape\s*=", dot_code):
+        return dot_code                                # every node has a shape: a flowchart
+    attrs, names = {}, []
+    for stmt in re.split(r"[;\n{}]", dot_code):
+        bare = re.sub(r"\[[^\]]*\]", "", stmt)
+        parts = re.split(r"--|->", bare)
+        if len(parts) > 1:                             # an edge: its [label=...] belongs to the link
+            names += [p.strip() for p in parts]
+            continue
+        m = re.fullmatch(r"\s*(" + _ID + r")\s*(?:\[([^\]]*)\])?\s*", stmt)
+        if m and "=" not in bare:                      # a node statement: name [attributes]
+            names.append(m.group(1))
+            key = m.group(1).strip('"')
+            attrs[key] = attrs.get(key, "") + " " + (m.group(2) or "")
+    routing = re.search(r'label\s*=\s*"?\s*\d+(\.\d+)?\s*"?', dot_code) is not None
+    lines = []
+    for raw in dict.fromkeys(n for n in names if n):
+        name = raw.strip('"')
+        if not re.fullmatch(_ID, raw) or name.lower() in _DOT_WORDS:
+            continue
+        a = attrs.get(name, "")
+        if re.search(r"\bshape\s*=", a):
+            continue                                   # a flowchart box keeps its shape
+        m = re.search(r'label\s*=\s*"((?:[^"\\]|\\.)*)"', a)
+        label = (m.group(1) if m else name).replace("\\n", " ")
+        if len(label) > 24:
+            continue
+        kind = device_icons.icon_kind(label, default=None)
+        if routing and len(name) <= 3:
+            kind = "router"
+        if kind is None:
+            continue
+        icon = str(device_icons.icon_file(kind, "light", 64)).replace('"', "")
+        lines.append(f'"{name}" [shape=plaintext, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0">'
+                     f'<TR><TD><IMG SRC="{icon}"/></TD></TR><TR><TD>{html.escape(label)}</TD></TR></TABLE>>];')
+    if not lines:
+        return dot_code
+    end = dot_code.rstrip().rfind("}")
+    return dot_code[:end] + "\n" + "\n".join(lines) + "\n" + dot_code[end:] if end != -1 else dot_code
+
+
 def draw_topology(dot_code: str, name: str) -> dict:
     """Draw a network topology or graph (computers, switches, routers, links,
     routing graphs with link costs) from Graphviz DOT code.
@@ -22,23 +75,34 @@ def draw_topology(dot_code: str, name: str) -> dict:
     'digraph' with '->' for directed ones. Give links a label for costs, for example
     A -- B [label="4"]. Tip: start with 'rankdir=LR;' for a left-to-right layout.
     name: short file name without spaces, for example 'lan_topology'.
+    Devices get icons automatically from their names (PC1, R1, Switch, Internet,
+    DNS server, Alice...), so name the nodes after the devices. Flowcharts work too:
+    use 'digraph' with node [shape=box] (and shape=diamond for a question).
     The picture is saved and shown to the student. If the result contains an
     'error', fix the DOT code and call this tool again."""
     Path("diagrams").mkdir(exist_ok=True)
     safe = _clean_name(name)
     dot_file = Path("diagrams") / f"{safe}.dot"
     png_file = Path("diagrams") / f"{safe}.png"
-    dot_file.write_text(dot_code, encoding="utf-8")
     dot = binaries.find_tool("dot")
     if dot is None:
         return {"error": str(binaries.ToolMissing("dot"))}
     try:
-        result = subprocess.run(
-            [dot, "-Tpng", str(dot_file), "-o", str(png_file)],
-            capture_output=True, text=True, timeout=30, **binaries.NO_WINDOW,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return {"error": f"Graphviz could not run: {e}"}
+        with_icons = _with_icons(dot_code)
+    except Exception:
+        with_icons = dot_code
+    result = None
+    for code in dict.fromkeys([with_icons, dot_code]):   # with icons, else exactly as written
+        dot_file.write_text(code, encoding="utf-8")
+        try:
+            result = subprocess.run(
+                [dot, "-Tpng", str(dot_file), "-o", str(png_file)],
+                capture_output=True, text=True, timeout=30, **binaries.NO_WINDOW,
+            )
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return {"error": f"Graphviz could not run: {e}"}
+        if result.returncode == 0:
+            break
     if result.returncode != 0:
         return {"error": "Graphviz could not draw this DOT code: " + result.stderr[:300]}
     _open_image(png_file)
@@ -75,9 +139,11 @@ def draw_sequence_diagram(title: str, participants: list[str],
     n = len(steps)
     fig, ax = plt.subplots(figsize=(3 + 2.5 * len(participants), 1.8 + 0.8 * n))
     bottom = -(n + 1)
+    from matplotlib.offsetbox import AnnotationBbox, OffsetImage
     for p, x in xs.items():
-        ax.text(x, 0.3, p, ha="center", va="bottom", fontsize=12, fontweight="bold",
-                bbox=dict(boxstyle="round", fc="#dbeafe"))
+        ax.text(x, 0.15, p, ha="center", va="bottom", fontsize=12, fontweight="bold")
+        icon = device_icons.icon_image(device_icons.icon_kind(p), 96, "light")
+        ax.add_artist(AnnotationBbox(OffsetImage(icon, zoom=0.5), (x, 0.95), frameon=False))
         ax.plot([x, x], [0, bottom], color="gray", linestyle="--", linewidth=1)
     for i, (x1, x2, label) in enumerate(steps, start=1):
         y = -i
@@ -88,7 +154,7 @@ def draw_sequence_diagram(title: str, participants: list[str],
     ax.set_title(title)
     ax.axis("off")
     ax.set_xlim(-0.6, len(participants) - 0.4)
-    ax.set_ylim(bottom - 0.3, 1.3)
+    ax.set_ylim(bottom - 0.3, 1.5)
 
     Path("diagrams").mkdir(exist_ok=True)
     png_file = Path("diagrams") / f"{_clean_name(name)}.png"

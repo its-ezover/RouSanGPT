@@ -375,5 +375,74 @@ formula_tools.delete_spec("caesar_cipher")
 formula_tools.delete_spec("queue_delay")
 agent.reload_tools()
 
+# ---- course pictures (explainers): every kind draws, with the slides' numbers ----
+import explainers  # noqa: E402,F401
+import video_tools  # noqa: E402
+import visual_kit  # noqa: E402
+
+broken = []
+for kind_name in visual_kit.KINDS:
+    try:
+        visual = visual_kit.build(kind_name, [])
+        for step in [None] + list(range(-1, visual["steps"])):     # the picture and every animation step
+            img, d = visual_kit.canvas(visual["title"], visual_kit.DARK if step is not None else visual_kit.LIGHT)
+            visual["draw"](d, visual_kit.DARK if step is not None else visual_kit.LIGHT, step)
+    except Exception as e:
+        broken.append(f"{kind_name}: {e}")
+check(f"all {len(visual_kit.KINDS)} explainer kinds draw, as a picture and step by step {broken}", not broken)
+
+
+def shown(kind_name, inputs=()):
+    return visual_kit.build(kind_name, list(inputs))["result"]
+
+
+check("explainer: Go-Back-N resends 2, 3, 4, 5 and Selective Repeat only 2 (the slides' example)",
+      "4 retransmissions" in shown("go_back_n") and "1 retransmissions" in shown("selective_repeat"))
+check("explainer: stop-and-wait U = 0.000267 with L = 8000, R = 1 Gbps, RTT = 30 ms",
+      "U = 0.000267" in shown("stop_and_wait"))
+check("explainer: RTT estimation follows the solutions manual (106.72 ms, DevRTT 14.57)",
+      "106.72 + 4 x 14.57" in shown("tcp_rtt"))
+check("explainer: TCP Reno goes to 9 after 3 dup ACKs at cwnd 12, Tahoe to 1 then 2, 4, 6",
+      "reno: 1, 2, 4, 8, 9, 10, 11, 12, 9" in shown("tcp_congestion")
+      and "tahoe: 1, 2, 4, 8, 9, 10, 11, 12, 1, 2, 4, 6" in shown("tcp_congestion"))
+check("explainer: packet vs circuit switching gives 10 users and 0.0004",
+      "supports 10 users" in shown("packet_vs_circuit") and "0.000424" in shown("packet_vs_circuit"))
+check("explainer: Dijkstra least costs from u: v 2, w 3, x 1, y 2, z 4",
+      shown("dijkstra_table").endswith("v 2, w 3, x 1, y 2, z 4"))
+check("explainer: 200.23.24.170 goes to link 1 (the /24 beats the /21)", "link 1" in shown("longest_prefix_match"))
+check("explainer: CRC of 101110 with G = 1001 is 011", shown("crc").startswith("R = 011"))
+check("explainer: ciphers and number theory give the slides' answers",
+      shown("playfair") == "ON UF PH NZ RM BZ" and shown("vigenere") == "ZICVTWQNGRZGVTWAVZHCQYGLMGJ"
+      and "x = -111,  y = 355" in shown("extended_euclid") and "= 19" in shown("modular_inverse"))
+check("explainer: the student's own numbers are used", "17^-1 mod 43 = 38" in shown("modular_inverse", ["17", "43"]))
+check("explainer: a wrong kind is an error message, not a crash",
+      "error" in explainers.draw_explainer("no_such_kind", []))
+scene = video_tools.Scene(title="t", bullets=[], narration="n", diagram_type="anim_explainer",
+                          explainer_kind="go_back_n", explainer_inputs=[], sequence_participants=[],
+                          sequence_messages=[], header_fields=[], topology_dot="", flow_nodes=[], flow_packets=0,
+                          window_total=0, window_size=0, graph_edges=[], graph_source="")
+check("videos can use the explainers, built step by step", video_tools.make_scene_animation(scene) is not None)
+
+# ---- device icons ----
+import device_icons  # noqa: E402
+import diagram_tools  # noqa: E402
+
+blank = [k for k in device_icons.ICONS for t in ("light", "dark")
+         if device_icons.icon_image(k, 64, t).getbbox() is None]
+check(f"all {len(device_icons.ICONS)} icons draw in both themes {blank}", not blank)
+expected = {"PC1": "pc", "Client": "pc", "Router 1": "router", "R2": "router", "Switch": "switch",
+            "DNS server": "dns_server", "local DNS": "dns_server", "Web server": "web_server",
+            "Proxy": "server", "Internet": "cloud", "Alice": "person", "Trudy": "attacker",
+            "AP": "access_point", "Laptop": "laptop", "KDC": "ca", "Firewall": "firewall"}
+wrong = {n: device_icons.icon_kind(n) for n, k in expected.items() if device_icons.icon_kind(n) != k}
+check(f"device names get the right icons {wrong}", not wrong)
+routing = diagram_tools._with_icons('graph { u -- v [label="2"]; v -- x [label="1"]; }')
+check("topology: a link's cost label stays on the link (nodes keep their names u, v, x)",
+      routing.count("IMG") == 3 and ">v<" in routing and ">x<" in routing and ">2<" not in routing)
+check("topology: a flowchart keeps its boxes",
+      "IMG" not in diagram_tools._with_icons('digraph { node [shape=box]; A [label="Encrypt message"]; A -> B; }'))
+check("read-aloud skips emojis but keeps Arabic",
+      server.clean_for_speech("💡 Tip ✅ شو ⚠️") == "Tip شو")
+
 print("\nproblems:", problems if problems else "none")
 sys.exit(1 if problems else 0)

@@ -13,8 +13,10 @@ from pydantic import BaseModel
 import animation_tools
 import binaries
 import diagram_tools
+import explainers
 import gemini_client
 import tts
+import visual_kit
 from quiz import _course_excerpts   # finds course material (slides and books only)
 
 client = gemini_client.LazyClient(timeout_ms=90000)   # uses the key from Settings or .env
@@ -31,13 +33,15 @@ class Scene(BaseModel):
     bullets: list[str]
     narration: str
     diagram_type: Literal[
-        "none", "sequence", "packet_header", "topology",
+        "none", "explainer", "anim_explainer", "sequence", "packet_header", "topology", "flowchart",
         "anim_message_exchange", "anim_packet_flow", "anim_sliding_window", "anim_dijkstra",
     ]
+    explainer_kind: str                # "explainer" and "anim_explainer"
+    explainer_inputs: list[str]        # "explainer" and "anim_explainer"
     sequence_participants: list[str]   # "sequence" and "anim_message_exchange"
     sequence_messages: list[str]       # "sequence" and "anim_message_exchange"
     header_fields: list[str]           # "packet_header"
-    topology_dot: str                  # "topology"
+    topology_dot: str                  # "topology" and "flowchart"
     flow_nodes: list[str]              # "anim_packet_flow"
     flow_packets: int                  # "anim_packet_flow"
     window_total: int                  # "anim_sliding_window"
@@ -53,7 +57,8 @@ class Storyboard(BaseModel):
 
 def write_storyboard(topic, num_scenes):
     context = _course_excerpts(topic)
-    prompt = f"""You write short educational video scripts for Computer Networks students.
+    prompt = f"""You write short educational video scripts for university students of
+Computer Networks and of Cryptography and Network Security.
 Topic: {topic}
 Number of scenes: {num_scenes}
 
@@ -79,12 +84,27 @@ Rules:
 
 Pictures: in the scenes where a picture explains better than bullets (about half
 of the scenes, never the first or the last), choose a diagram_type. Prefer an
-ANIMATION when movement is the point (use at most two animations per video). For a
-scene with a picture, the narration must refer to it ("look at...", "watch how...").
+ANIMATION when movement is the point (use at most two animations per video). Use a
+DIFFERENT picture in each scene: never the same type and kind twice in one video.
+For a scene with a picture, the narration must refer to it ("look at...", "watch
+how..."), and any numbers in the narration must be the ones of that picture's inputs.
 Fill ONLY the fields of the type you choose; leave all other fields empty
 ([] or "" or 0).
+- "explainer" (still picture) or "anim_explainer" (built step by step): the figures
+  of the lecture slides, with every number calculated for you. explainer_kind is
+  one of the kinds below; explainer_inputs are its inputs as text, or [] for the
+  slides' own example. This is the BEST choice whenever a kind matches the topic,
+  and the ONLY choice for calculations, algorithms with numbers and ciphers: never
+  draw a calculation or a cipher as a "sequence" of messages.
+{visual_kit.kinds_text()}
+- "flowchart": the steps of an algorithm or the parts of a system as boxes and
+  arrows (for example the Miller-Rabin TEST, the symmetric cipher model, a Feistel
+  round). topology_dot is complete Graphviz DOT code: a digraph with at most 9 nodes,
+  for example: digraph {{ rankdir=TB; node [shape=box]; A [label="n - 1 = 2^k q"]; B
+  [label="a^q mod n = 1?" shape=diamond]; A -> B; }}
 - "sequence" (still picture) or "anim_message_exchange" (arrows appear one by one):
-  a message exchange such as a handshake, DNS lookup or HTTP request.
+  ONLY a real message exchange between parties, such as a handshake, DNS lookup or
+  HTTP request.
   sequence_participants lists the parties from left to right, for example
   ["Client", "Server"]. sequence_messages lists at most 8 steps in time order, each
   written exactly as 'Sender -> Receiver: short label', for example
@@ -146,8 +166,10 @@ def make_scene_diagram(scene, number):
                 scene.title, scene.sequence_participants, scene.sequence_messages, name)
         elif scene.diagram_type == "packet_header" and scene.header_fields:
             result = diagram_tools.draw_packet_header(scene.title, scene.header_fields, name)
-        elif scene.diagram_type == "topology" and scene.topology_dot.strip():
+        elif scene.diagram_type in ("topology", "flowchart") and scene.topology_dot.strip():
             result = diagram_tools.draw_topology(scene.topology_dot, name)
+        elif scene.diagram_type == "explainer" and scene.explainer_kind.strip():
+            result = explainers.draw_explainer(scene.explainer_kind, scene.explainer_inputs, name)
         else:
             return None
         if "error" in result:
@@ -181,6 +203,8 @@ def make_scene_animation(scene):
                 scene.window_total or 8, scene.window_size or 3)
         elif kind == "anim_dijkstra":
             result = animation_tools.animate_dijkstra(scene.graph_edges, scene.graph_source)
+        elif kind == "anim_explainer":
+            result = explainers.animate_explainer(scene.explainer_kind, scene.explainer_inputs)
         else:
             return None
         if "error" in result or not captured:
@@ -234,7 +258,7 @@ def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
                 y += 48
             y += 18
 
-    d.text((80, H - 50), "RouSanGPT - Computer Networks", font=f_small, fill="#94a3b8")
+    d.text((80, H - 50), "RouSanGPT", font=f_small, fill="#94a3b8")
     d.text((W - 150, H - 50), f"{number} / {total}", font=f_small, fill="#94a3b8")
     img.save(out_path)
 
@@ -281,11 +305,12 @@ def _make_clip(i, scene, animation, diagram_png, total, tmp):
 
 def create_video(topic: str, num_scenes: int = 5) -> dict:
     """Create a short narrated educational video (an MP4 file) about a Computer
-    Networks topic, based on the course materials. Scenes can be bullet slides,
-    diagrams (message exchanges, packet headers, network layouts) or animations
-    (message exchange, packets travelling through routers, a sliding window,
-    Dijkstra's algorithm), with a spoken explanation in English. topic: for example
-    'TCP three-way handshake' or 'how Dijkstra's algorithm works'. num_scenes: from
+    Networks or Cryptography topic, based on the course materials. Scenes can be
+    bullet slides, the slides' figures with calculated numbers (step tables, timing
+    diagrams, charts, cipher pictures, still or built step by step), flowcharts,
+    message exchanges, packet headers, network layouts or animations, with a spoken
+    explanation in English. topic: for example 'TCP three-way handshake', 'Go-Back-N',
+    'the Miller-Rabin test' or 'the Playfair cipher'. num_scenes: from
     3 to 8 (default 5). It takes two to four minutes. The video is saved in the
     'videos' folder and opened for the student."""
     num_scenes = max(3, min(int(num_scenes), 8))

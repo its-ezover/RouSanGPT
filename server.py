@@ -427,6 +427,8 @@ def clean_for_speech(text):
     text = re.sub(r"```.*?```", " ", text, flags=re.S)
     text = re.sub(r"https?://\S+", " ", text)
     text = re.sub(r"[*_`#>|]", "", text)
+    # emojis are for the eyes: a voice would read them out as words ("light bulb")
+    text = re.sub("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]", "", text)
     text = re.sub(r"^\s*[-\u2022]\s+", "", text, flags=re.M)
     return re.sub(r"\s+", " ", text).strip()[:1500]
 

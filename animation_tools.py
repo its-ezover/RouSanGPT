@@ -8,7 +8,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 import binaries
-from more_tools import dijkstra_shortest_paths
+import device_icons
+from more_tools import _read_edge, dijkstra_shortest_paths
 
 W, H, FPS = 1280, 720, 30
 BG = "#0f172a"
@@ -128,16 +129,14 @@ def animate_message_exchange(title: str, participants: list[str],
     per_msg = 1.6
     n = len(participants)
     xs = [int(180 + i * (W - 360) / (n - 1)) for i in range(n)]
-    top, bottom = 210, H - 60
+    top, bottom = 250, H - 50
     step_h = min(90, (bottom - top - 20) / len(steps))
 
     def frame(t):
         img, d = new_frame(title)
         for pname, x in zip(participants, xs):
-            d.rounded_rectangle([x - 90, 120, x + 90, 175], radius=12,
-                                fill="#1e293b", outline="#38bdf8", width=3)
-            d.text((x, 148), pname, font=font(26, True), fill="white", anchor="mm")
-            d.line([(x, 175), (x, bottom)], fill="#475569", width=3)
+            device_icons.device(d, pname, x, 150, 64, "dark", "white", 22)
+            d.line([(x, 210), (x, bottom)], fill="#475569", width=3)
         for k, (s, r, label) in enumerate(steps):
             start = 0.6 + k * per_msg
             if t < start:
@@ -197,9 +196,7 @@ def animate_packet_flow(title: str, nodes: list[str], num_packets: int = 4,
                                 fill=PALETTE[p % len(PALETTE)])
             d.text((x, y), str(p + 1), font=font(22, True), fill=BG, anchor="mm")
         for node, x in zip(nodes, xs):      # drawn last, so packets "enter" the devices
-            d.rounded_rectangle([x - 75, y - 50, x + 75, y + 50], radius=14,
-                                fill="#1e293b", outline="#38bdf8", width=3)
-            d.text((x, y), node, font=font(24, True), fill="white", anchor="mm")
+            device_icons.device(d, node, x, y, 104, "dark", "white", 24)
         d.text((W // 2, 560), f"Packets delivered: {delivered} / {num_packets}",
                font=font(32, True), fill="#4ade80", anchor="mm")
         d.text((W // 2, 620), "Each router receives the whole packet before forwarding it",
@@ -285,17 +282,16 @@ def animate_dijkstra(edges: list[str], source: str, name: str = "dijkstra") -> d
     source = source.strip()
 
     links = []
-    for e in edges:
-        pair, cost = e.split(":")
-        a, b = [x.strip() for x in pair.split("-")]
-        links.append((a, b, cost.strip()))
+    for e in edges:                      # the same reader as the tool ('R-1->R-2:3' works too)
+        a, b, cost = _read_edge(e)
+        links.append((a, b, str(int(cost)) if cost.is_integer() else f"{cost:g}"))
     tree = set()
     for path in result["shortest_paths"].values():
         if path != "unreachable":
             parts = path.split(" -> ")
             tree.update(frozenset((u, v)) for u, v in zip(parts, parts[1:]))
 
-    cx, cy, rad = W // 2, 420, 200
+    cx, cy, rad = W // 2, 428, 182
     pos = {}
     for i, node in enumerate(nodes):
         angle = 2 * math.pi * i / len(nodes) - math.pi / 2
@@ -335,13 +331,15 @@ def animate_dijkstra(edges: list[str], source: str, name: str = "dijkstra") -> d
                 fill, outline = "#4ade80", "#4ade80"
             else:
                 fill, outline = "#1e293b", "#38bdf8"
-            d.ellipse([x - 36, y - 36, x + 36, y + 36], fill=fill, outline=outline, width=4)
-            d.text((x, y), node, font=font(28, True),
-                   fill=BG if node in done else "white", anchor="mm")
+            # a router in a ring: orange = being finalised, green = finalised, blue = not yet
+            d.ellipse([x - 46, y - 46, x + 46, y + 46], fill=BG, outline=outline, width=5)
+            device_icons.paste_icon(d, "router", x, y - 8, 58, "dark")
+            d.text((x, y + 30), node, font=font(20, True), fill=outline if fill != "#1e293b" else "white",
+                   anchor="mm")
             ox, oy = (x - cx) / rad, (y - cy) / rad
             value = dist[node]
             label = "d = ∞" if value == "infinity" else f"d = {value}"
-            d.text((x + ox * 62, y + oy * 62), label, font=font(22, True),
+            d.text((x + ox * 76, y + oy * 76), label, font=font(22, True),
                    fill="#e2e8f0", anchor="mm")
         return img
 

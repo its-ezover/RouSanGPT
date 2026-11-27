@@ -49,10 +49,29 @@ is built only with free tools.
   slides use.
 - **Your own formula tools:** describe a formula in plain English or Arabic and the
   AI fills in a tool for you; the tutor then uses it in its answers.
+- **The slides' figures, with calculated numbers ("explainers"):** 31 kinds of
+  pictures, each also as an animation that builds step by step, made after the
+  lecture slides. Networks: encapsulation, packet vs circuit switching, HTTP
+  response time, stop-and-wait vs pipelining, Go-Back-N and Selective Repeat in
+  action, TCP RTT estimation and congestion window (Reno and Tahoe), Internet
+  checksum, CRC division, longest prefix matching, IP fragmentation, address bits,
+  Dijkstra's table, distance vectors, switch self-learning and ALOHA. Crypto: GCD,
+  extended Euclid, inverses, square-and-multiply, Miller-Rabin, CRT, GF(2^n)
+  multiply and inverse, and the Caesar, Vigenere, Playfair, rail fence,
+  transposition and Vernam ciphers. With no numbers given, each one shows the
+  slides' own example; every number is calculated, never typed by the AI.
 - **Diagrams:** message-sequence diagrams (TCP handshake, DNS, HTTP...), network
-  topologies and packet headers (TCP, UDP, IP).
+  topologies, flowcharts and packet headers (TCP, UDP, IP).
+- **Device icons everywhere:** 34 icons (PC, laptop, server, web, DNS and mail
+  servers, database, data center, router, switch, hub, firewall, modem, access
+  point, cell tower, satellite, cloud, phone, tablet, printer, camera, TV, Alice and
+  Bob, Trudy the attacker, key, lock, shield, document, envelope, certificate
+  authority, globe, home, building, gear), chosen from each device's name, in
+  topologies, sequence diagrams, every animation and the explainers.
+- **Friendly answers:** the tutor uses a few fitting emojis (💡 tips, ⚠️ common
+  mistakes, ✅ correct, 🔐 encryption...); read-aloud skips them.
 - **Animations:** message exchanges, store-and-forward packet flow, sliding window
-  and Dijkstra's algorithm, as short MP4 clips.
+  and Dijkstra's algorithm, plus every explainer above, as short MP4 clips.
 - **Narrated videos:** educational MP4 videos made of slides, diagrams and
   animations with a spoken explanation.
 - **Quizzes:** multiple-choice, fill-in-the-blank and Wireshark-style packet
@@ -393,6 +412,7 @@ other computers on the network cannot reach it.
 | Classical and block ciphers (`cipher_tools.py`) | `caesar_cipher`, `affine_cipher`, `monoalphabetic_cipher`, `letter_frequency`, `vigenere_cipher`, `playfair_cipher`, `hill_cipher`, `vernam_xor`, `rail_fence_cipher`, `row_transposition_cipher`, `block_cipher_sizes`, `brute_force_time` |
 | Diagrams (`diagram_tools.py`) | `draw_topology` (Graphviz), `draw_sequence_diagram` and `draw_packet_header` (matplotlib) |
 | Animations (`animation_tools.py`) | `animate_message_exchange`, `animate_packet_flow`, `animate_sliding_window`, `animate_dijkstra` |
+| The slides' figures (`explainers.py`) | `draw_explainer` and `animate_explainer`: one tool each for all 31 kinds (from `net_visuals.py` and `crypto_visuals.py`), so the request to the AI stays small |
 | Videos (`video_tools.py`) | `create_video` |
 | Quizzes (`quiz.py`) | `create_quiz`, `check_quiz_answer` |
 | Your formula tools (`formula_tools.py`) | whatever you create in the Tools panel |
@@ -424,8 +444,13 @@ tutor cannot leak them.
 - **Animations:** Pillow draws every frame (30 per second) and FFmpeg turns the
   frames into an MP4 in `animations/`. The AI chooses the content (for example the
   graph for Dijkstra) and then explains what the student sees.
+- **Explainers:** each kind (`net_visuals.py`, `crypto_visuals.py`) works out its
+  numbers with the course calculators and gives a drawing function that shows
+  every step, or only the first steps with the current one highlighted. The same
+  code makes the white still picture and the dark animation (`visual_kit.py`).
 - **Videos:** Gemini writes a storyboard (scenes with a title, bullet points, a
-  narration and an optional diagram or animation) based on the course excerpts.
+  narration and an optional diagram or animation, and a different picture in each
+  scene) based on the course excerpts.
   Each narration is spoken with edge-tts, each scene becomes a slide or animation
   clip exactly as long as its narration, and FFmpeg joins the clips into one MP4 in
   `videos/` (the storyboard is kept next to it as JSON). If you ask for a video and
@@ -558,6 +583,9 @@ with the install command instead of a crash.
 | `number_theory_tools.py`, `finite_field_tools.py`, `cipher_tools.py` | exact cryptography solvers |
 | `diagram_tools.py` | diagrams |
 | `animation_tools.py` | animation engine |
+| `explainers.py`, `visual_kit.py` | the slides' figures as pictures and animations: the two tools, the registry and the shared drawing code |
+| `net_visuals.py`, `crypto_visuals.py` | the networking and cryptography figures |
+| `device_icons.py` | the device and security icons, and choosing one from a name |
 | `video_tools.py` | narrated video generator |
 | `quiz.py` | quiz generator and answer checker |
 | `install.sh`, `uninstall.sh` | Linux installer |

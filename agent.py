@@ -23,6 +23,7 @@ import video_tools
 from animation_tools import ANIMATION_TOOLS
 from cipher_tools import CIPHER_TOOLS
 from diagram_tools import DIAGRAM_TOOLS
+from explainers import EXPLAINER_TOOLS
 from extra_tools import EXTRA_TOOLS
 from finite_field_tools import FINITE_FIELD_TOOLS
 from more_tools import MORE_TOOLS
@@ -64,6 +65,13 @@ tables (extended Euclidean algorithm, GF(2^n) inverse, Hill cipher blocks) and s
 comparisons (TCP vs UDP); keep tables small. Put letter grids (Playfair matrix,
 rail fence, transposition) in a code block so the letters line up. Keep answers
 clear and not too long.
+
+EMOJIS: use a few fitting emojis to make answers friendly and easy to scan, for
+example at the start of a heading or a key line: 📡 networks, 🌐 the Internet, 🔐 🔑
+encryption and keys, 🧮 a calculation, 💡 a tip or hint, ✅ correct, ❌ wrong, ⚠️ a
+common mistake, 📌 the key point, 📝 practice, 🎯 the final answer, 🎬 a video. Two to
+five per answer is plenty. Never put emojis inside numbers, formulas, code blocks,
+tables or packet captures, and never use one instead of a word.
 
 LANGUAGE (very important): answer in the language of the student's LATEST message.
 - If the latest message is in English, answer in English, even if earlier messages
@@ -149,8 +157,19 @@ one matches the question. Never calculate in your head. Use the tool result to
 check or explain the student's work.
 
 When a picture would help, draw it with your tools:
+- draw_explainer for the figures of the lecture slides, in both courses: step tables
+  (Dijkstra, distance vector, RTT estimation, longest prefix match, fragmentation,
+  extended Euclid, inverses, Miller-Rabin, CRT, GF(2^n)), timing diagrams
+  (stop-and-wait, Go-Back-N, Selective Repeat), charts (TCP congestion window,
+  packet vs circuit switching, ALOHA, HTTP response time), encapsulation, CRC,
+  checksum, address bits, switch self-learning and every classical cipher. Its
+  numbers are calculated, so prefer it whenever it has a matching kind. Give the
+  student's own numbers as inputs; [] shows the slides' example.
 - draw_sequence_diagram for message exchanges (TCP handshake, DNS, HTTP, DHCP, ARP).
-- draw_topology for network layouts and routing graphs.
+  Never use it for calculations or ciphers.
+- draw_topology for network layouts, routing graphs, and flowcharts or block
+  diagrams of an algorithm or system (Miller-Rabin TEST, the symmetric cipher model,
+  a Feistel round): write a 'digraph' with boxes and arrows.
 - draw_packet_header for protocol headers (TCP, UDP, IP). Use the field sizes
   from the course materials.
 After drawing, briefly explain the diagram step by step. The picture is shown to the
@@ -170,6 +189,9 @@ student the video is shown below, and summarise what it covers in two or three
 sentences.
 
 Animations: when a student wants to SEE something move, use the matching tool:
+animate_explainer (any draw_explainer kind, built step by step: Go-Back-N and
+Selective Repeat with a lost packet, the congestion window growing, encapsulation,
+a cipher encrypting letter by letter, a step table filling row by row),
 animate_message_exchange (handshakes, DNS, HTTP), animate_packet_flow
 (store-and-forward), animate_sliding_window, animate_dijkstra. For Dijkstra, use
 the graph the student gave. When it finishes, explain what the student sees,
@@ -182,7 +204,7 @@ diagram that you did not just create with a tool."""
 
 # ---- Tools (built-in ones plus formula tools added in the app) ----
 BASE_TOOLS = (ALL_TOOLS + MORE_TOOLS + DIAGRAM_TOOLS + QUIZ_TOOLS + EXTRA_TOOLS
-              + VIDEO_TOOLS + ANIMATION_TOOLS
+              + VIDEO_TOOLS + ANIMATION_TOOLS + EXPLAINER_TOOLS
               + NUMBER_THEORY_TOOLS + FINITE_FIELD_TOOLS + CIPHER_TOOLS)
 TOOLS_VERSION = 0
 CONFIG = None
