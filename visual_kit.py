@@ -17,7 +17,7 @@ the course's calculators, never from the AI.
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import ImageDraw
 
 import animation_tools as at
 import device_icons
@@ -37,18 +37,19 @@ MAX_ROWS = 14
 # ---------- drawing helpers ----------
 
 def canvas(title, th):
+    """A frame in the Frutiger Aero style: a sky behind it and a glossy title bar."""
     if th is DARK:
         return at.new_frame(title)
-    img = Image.new("RGB", (W, H), th["bg"])
+    img = at.aero_background(light=True).copy()
     d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, W, 12], fill=th["accent"])
-    d.text((80, 55), title[:48], font=at.font(42, True), fill=th["text"])
+    at.frame_title(d, title, light=True)
     return img, d
 
 
 def box(d, x, y, w, h, th, fill=None, outline=None, width=2, radius=8):
-    d.rounded_rectangle([x, y, x + w, y + h], radius=radius, fill=fill or th["cell"],
-                        outline=outline or th["line"], width=width)
+    """A glossy box (a lighter upper half and a highlight, the Aero look)."""
+    at.gloss_rect(d, [x, y, x + w, y + h], radius, fill or th["cell"], outline or th["line"], width,
+                  light=th is LIGHT)
 
 
 def center(d, x, y, text, size, th, color=None, bold=False):
@@ -110,7 +111,7 @@ def draw_table(d, th, columns, rows, cur, marks, top, bottom, cell_marks=None, x
     x0 = (W - sum(widths)) / 2 if x_left is None else x_left
     d.rounded_rectangle([x0, top, x0 + sum(widths), top + row_h * (n + 1)], radius=10,
                         fill=th["cell"], outline=th["line"], width=2)
-    d.rounded_rectangle([x0, top, x0 + sum(widths), top + row_h], radius=10, fill=th["head"])
+    at.gloss_rect(d, [x0, top, x0 + sum(widths), top + row_h], 10, th["head"], light=th is LIGHT)
     x = x0
     for c, head in enumerate(columns):
         center(d, x + widths[c] / 2, top + row_h / 2, head, size, th, th["accent"], True)

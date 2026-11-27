@@ -309,7 +309,7 @@ def _playfair(text, key):
                 continue
             y = 180 + k * 40
             if cur == k:
-                d.rounded_rectangle([550, y - 4, W - 60, y + 34], radius=8, fill=th["mark"])
+                at.gloss_rect(d, [550, y - 4, W - 60, y + 34], 8, th["mark"], light=th is vk.LIGHT)
             d.text((566, y), f"{p}  ->  {c}", font=at.font(24, True), fill=th["text"])
             d.text((760, y + 2), rule, font=at.font(20), fill=th["muted"])
         done = [c for k, (_, c, _) in enumerate(pairs) if _visible(cur, k)]
@@ -338,8 +338,8 @@ def _rail_fence(text, key):
         reading = cur - n if cur is not None and cur >= n else None
         for r in range(rails):
             if reading == r:
-                d.rounded_rectangle([gx - 8, gy + r * rh, gx + n * cw + 4, gy + (r + 1) * rh - 6],
-                                    radius=8, fill=th["mark"])
+                at.gloss_rect(d, [gx - 8, gy + r * rh, gx + n * cw + 4, gy + (r + 1) * rh - 6], 8, th["mark"],
+                              light=th is vk.LIGHT)
         points = [(gx + i * cw + cw / 2, gy + pattern[i] * rh + rh / 2 - 3) for i in range(placed)]
         if len(points) > 1:
             d.line(points, fill=th["line"], width=2)

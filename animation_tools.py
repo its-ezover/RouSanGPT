@@ -5,7 +5,7 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageFont
 
 import binaries
 import device_icons
@@ -39,11 +39,76 @@ def ease(x):
     return x * x * (3 - 2 * x)
 
 
-def new_frame(title):
-    img = Image.new("RGB", (W, H), BG)
+# ---------- Frutiger Aero look: a sky behind everything, glossy boxes ----------
+
+def _mix(color, other, amount):
+    a, b = ImageColor.getrgb(color)[:3], ImageColor.getrgb(other)[:3]
+    return "#%02x%02x%02x" % tuple(int(x + (y - x) * amount) for x, y in zip(a, b))
+
+
+@lru_cache(maxsize=2)
+def aero_background(light=False):
+    """A sky: a vertical gradient with soft glows and a few faint bubbles. Made once."""
+    stops = ([(0, "#bfe5ff"), (0.5, "#e6f5ff"), (1, "#f5fbff")] if light else
+             [(0, "#031a2d"), (0.55, "#06304f"), (1, "#073d4a")])
+    img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, W, 12], fill="#38bdf8")
-    d.text((80, 55), title[:48], font=font(42, True), fill="white")
+    for y in range(H):
+        t = y / (H - 1)
+        for (t0, c0), (t1, c1) in zip(stops, stops[1:]):
+            if t0 <= t <= t1:
+                d.line([(0, y), (W, y)], fill=_mix(c0, c1, (t - t0) / (t1 - t0)))
+                break
+    glows = ([([-260, -320, 640, 300], (255, 255, 255), 200), ([820, 470, 1520, 980], (120, 214, 130), 95),
+              ([880, 60, 1120, 300], (255, 255, 255), 110)] if light else
+             [([-260, -320, 640, 300], (76, 195, 255), 70), ([820, 470, 1520, 980], (70, 200, 140), 60),
+              ([900, 80, 1120, 300], (143, 220, 255), 40)])
+    out = img.convert("RGBA")
+    for box, rgb, alpha in glows:
+        # each glow on its own layer, whose see-through pixels already have its colour, so
+        # the blur fades it out instead of mixing in black (a grey smudge)
+        glow = Image.new("RGBA", (W, H), rgb + (0,))
+        ImageDraw.Draw(glow).ellipse(box, fill=rgb + (alpha,))
+        out.alpha_composite(glow.filter(ImageFilter.GaussianBlur(110)))
+    bubbles = Image.new("RGBA", (W, H), (255, 255, 255, 0))
+    b = ImageDraw.Draw(bubbles)
+    for (x, y, r) in ((1130, 140, 34), (1185, 230, 18), (1060, 610, 26), (70, 640, 22), (140, 560, 12)):
+        b.ellipse([x - r, y - r, x + r, y + r], outline=(255, 255, 255, 60 if light else 40), width=2)
+        b.ellipse([x - r * .5, y - r * .7, x - r * .05, y - r * .35], fill=(255, 255, 255, 70 if light else 45))
+    out.alpha_composite(bubbles.filter(ImageFilter.GaussianBlur(1)))
+    return out.convert("RGB")
+
+
+def gloss_rect(d, xy, radius, fill, outline=None, width=1, light=False):
+    """A glossy Aero box: the colour, a lighter upper half and a thin highlight."""
+    x0, y0, x1, y1 = xy
+    d.rounded_rectangle(xy, radius=radius, fill=fill, outline=outline, width=width)
+    if fill is None or x1 - x0 < 6 or y1 - y0 < 6:
+        return
+    top = _mix(fill, "#ffffff", 0.30 if light else 0.22)
+    inset = max(1, width)
+    half = [x0 + inset, y0 + inset, x1 - inset, y0 + (y1 - y0) * 0.48]
+    try:
+        d.rounded_rectangle(half, radius=max(0, radius - inset), fill=top, corners=(True, True, False, False))
+    except TypeError:                                   # older Pillow: no per-corner rounding
+        d.rectangle(half, fill=top)
+    if y1 - y0 > 14:
+        d.line([(x0 + radius, y0 + inset + 1), (x1 - radius, y0 + inset + 1)],
+               fill=_mix(fill, "#ffffff", 0.6), width=1)
+
+
+def frame_title(d, title, light=False):
+    """The glossy top bar and the title with a soft shadow."""
+    d.rectangle([0, 0, W, 12], fill="#2aa7ee" if light else "#3fb2f5")
+    d.rectangle([0, 0, W, 4], fill="#bdeaff")
+    d.text((82, 58), title[:48], font=font(42, True), fill="#7fb4d6" if light else "#021627")
+    d.text((80, 55), title[:48], font=font(42, True), fill="#0b2a45" if light else "white")
+
+
+def new_frame(title):
+    img = aero_background().copy()
+    d = ImageDraw.Draw(img)
+    frame_title(d, title)
     return img, d
 
 
@@ -192,8 +257,7 @@ def animate_packet_flow(title: str, nodes: list[str], num_packets: int = 4,
                 continue
             frac = min(1.0, (elapsed - hop * seg) / hop_time)
             x = xs[hop] + (xs[hop + 1] - xs[hop]) * frac
-            d.rounded_rectangle([x - 24, y - 20, x + 24, y + 20], radius=6,
-                                fill=PALETTE[p % len(PALETTE)])
+            gloss_rect(d, [x - 24, y - 20, x + 24, y + 20], 6, PALETTE[p % len(PALETTE)])
             d.text((x, y), str(p + 1), font=font(22, True), fill=BG, anchor="mm")
         for node, x in zip(nodes, xs):      # drawn last, so packets "enter" the devices
             device_icons.device(d, node, x, y, 104, "dark", "white", 24)
@@ -242,7 +306,7 @@ def animate_sliding_window(total_packets: int = 10, window_size: int = 4,
                 color = "#facc15"          # sent, waiting for the ACK
             else:
                 color = "#475569"          # not sent yet
-            d.rounded_rectangle([x, y, x + box_w, y + box_w], radius=8, fill=color)
+            gloss_rect(d, [x, y, x + box_w, y + box_w], 8, color)
             d.text((x + box_w / 2, y + box_w / 2), str(i), font=font(26, True),
                    fill=BG, anchor="mm")
         wx = start_x + left * (box_w + gap) - 8
@@ -256,7 +320,7 @@ def animate_sliding_window(total_packets: int = 10, window_size: int = 4,
                                             ("#facc15", "sent, waiting for ACK"),
                                             ("#475569", "not sent yet")]):
             lx = 220 + k * 340
-            d.rounded_rectangle([lx, 590, lx + 28, 618], radius=5, fill=color)
+            gloss_rect(d, [lx, 590, lx + 28, 618], 5, color)
             d.text((lx + 42, 604), label, font=font(24), fill="#e2e8f0", anchor="lm")
         return img
 

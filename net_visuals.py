@@ -128,7 +128,7 @@ def _binomial(inputs):
                 continue
             x0, y = px(k + 0.15, probs[k])
             x1, yb = px(k + 0.85, 0)
-            d.rectangle([x0, y, x1, yb], fill=th["bad"] if k > limit else th["accent"])
+            at.gloss_rect(d, [x0, y, x1, yb], 2, th["bad"] if k > limit else th["accent"], light=th is vk.LIGHT)
         xl, _ = px(limit + 1, 0)
         d.line([(xl, 150), (xl, 560)], fill=th["warn"], width=3)
         left(d, xl + 8, 165, f"more than {limit} active: too many", 20, th, th["warn"], True)
@@ -166,8 +166,8 @@ def _http_timing(inputs):
             y = 200 + i * 110
             left(d, 80, y, name, 24, th, th["text"], True)
             width = (W - 420) * total / top
-            d.rounded_rectangle([80, y + 22, 80 + max(width, 6), y + 62], radius=8,
-                                fill=th["accent"] if i < 2 else th["good"])
+            at.gloss_rect(d, [80, y + 22, 80 + max(width, 6), y + 62], 8,
+                          th["accent"] if i < 2 else th["good"], light=th is vk.LIGHT)
             left(d, 90 + max(width, 6), y + 42, f"{_fmt(total)} ms", 24, th, th["text"], True)
             left(d, 80, y + 82, formula, 18, th, th["muted"])
         if cur is None:
@@ -608,7 +608,8 @@ def _fragmentation(inputs):
             for k, (_, _, _, part) in enumerate(frags):
                 w = total_w * part / (size - header)
                 if visible(cur, k):
-                    d.rectangle([x, y, x + w - 3, y + 40], fill=th["accent"] if k % 2 == 0 else th["second"])
+                    at.gloss_rect(d, [x, y, x + w - 3, y + 40], 6, th["accent"] if k % 2 == 0 else th["second"],
+                                  light=th is vk.LIGHT)
                     center(d, x + w / 2, y + 20, f"{part} B", 18, th, th["on_accent"], True)
                 x += w
     visual["draw"] = draw
@@ -805,7 +806,7 @@ def _switch_learning(inputs):
             d.line([(port_x, edge_y), (x, y + (66 if top else -38))], fill=color,
                    width=5 if color != th["line"] else 2)
             if k >= 0 and host in (src, dst):
-                d.rounded_rectangle([x - 44, y - 40, x + 44, y + 40], radius=12, fill=th["mark"])
+                at.gloss_rect(d, [x - 44, y - 40, x + 44, y + 40], 12, th["mark"], light=th is vk.LIGHT)
             device_icons.paste_icon(d, "pc", x, y, 70, theme)
             center(d, x, y + 52, f"{host}  (port {p})", 18, th, th["text"], True)
         tx = 800

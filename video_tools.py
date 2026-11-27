@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from google.genai import types
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from pydantic import BaseModel
 
 import animation_tools
@@ -226,8 +226,30 @@ def render_animation_clip(frame_fn, natural, narration_seconds, out_path):
     animation_tools.render_video(lambda t: frame_fn(t * speed), duration, out_path)
 
 
+def _glass(img, box, radius, fill=(255, 255, 255, 22), shadow=110):
+    """A Frutiger Aero glass panel: a soft shadow, a see-through panel and a shine."""
+    x0, y0, x1, y1 = box
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle([x0, y0 + 10, x1, y1 + 10], radius=radius, fill=(0, 10, 25, shadow))
+    out = img.convert("RGBA")
+    out.alpha_composite(layer.filter(ImageFilter.GaussianBlur(14)))
+    panel = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(panel).rounded_rectangle(box, radius=radius, fill=fill, outline=(160, 220, 255, 70), width=2)
+    out.alpha_composite(panel)
+    # the shine goes on its own layer: drawing it on the panel would replace the panel's pixels
+    shine = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(shine).rounded_rectangle([x0 + 2, y0 + 2, x1 - 2, y0 + (y1 - y0) * 0.42], radius=radius,
+                                            fill=(255, 255, 255, 16), corners=(True, True, False, False))
+    out.alpha_composite(shine)
+    return out.convert("RGB")
+
+
 def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
-    img = Image.new("RGB", (W, H), "#0f172a")
+    img = animation_tools.aero_background().copy()
+    if diagram_png:
+        img = _glass(img, [80, 190, 1200, 655], 18, fill=(255, 255, 255, 255), shadow=140)
+    elif bullets:
+        img = _glass(img, [60, 215, 1220, 640], 24)
     d = ImageDraw.Draw(img)
     regular = animation_tools.font_path()
     bold = animation_tools.font_path(bold=True)
@@ -235,26 +257,29 @@ def draw_slide(title, bullets, number, total, out_path, diagram_png=None):
     f_body = ImageFont.truetype(regular, 36)
     f_small = ImageFont.truetype(regular, 22)
 
-    d.rectangle([0, 0, W, 12], fill="#38bdf8")
+    d.rectangle([0, 0, W, 12], fill="#3fb2f5")
+    d.rectangle([0, 0, W, 4], fill="#bdeaff")
     y = 60 if diagram_png else 70
     for line in textwrap.wrap(title, width=34 if diagram_png else 30)[:2]:
+        d.text((82, y + 3), line, font=f_title, fill="#021627")      # a soft shadow
         d.text((80, y), line, font=f_title, fill="white")
         y += 58 if diagram_png else 66
 
     if diagram_png:
-        # a big white card with the diagram inside
-        d.rounded_rectangle([80, 190, 1200, 655], radius=18, fill="white")
+        # the diagram on the white glass card drawn above
         pic = Image.open(diagram_png).convert("RGB")
         scale = min(1090 / pic.width, 435 / pic.height, 1.5)
         pic = pic.resize((max(1, int(pic.width * scale)), max(1, int(pic.height * scale))),
                          Image.Resampling.LANCZOS)
         img.paste(pic, (80 + (1120 - pic.width) // 2, 190 + (465 - pic.height) // 2))
     else:
-        y += 30
+        y = max(y + 30, 245)
         for bullet in bullets[:5]:
-            d.ellipse([80, y + 14, 94, y + 28], fill="#38bdf8")
+            # a glossy orb
+            d.ellipse([96, y + 11, 116, y + 31], fill="#1b93de", outline="#0b6db3")
+            d.ellipse([100, y + 13, 112, y + 21], fill="#9fe2ff")
             for line in textwrap.wrap(bullet, width=46)[:2]:
-                d.text((115, y), line, font=f_body, fill="#e2e8f0")
+                d.text((135, y), line, font=f_body, fill="#e7f5ff")
                 y += 48
             y += 18
 
