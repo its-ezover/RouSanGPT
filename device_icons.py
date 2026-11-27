@@ -1,6 +1,8 @@
 """Device and security icons for the pictures and animations: PCs, servers,
 routers, switches, clouds, phones, people, keys, locks and more, drawn with
-Pillow (no image files), in a light and a dark colour set.
+Pillow (no image files), in a light and a dark colour set, in the glossy
+"Frutiger Aero" style: bright sky-blue and green colours, a light gradient, a
+glass highlight on the upper half and a soft shadow (see _aero).
 
     icon_kind("Router 1") -> "router"      (picks the icon from a name)
     paste_icon(d, "router", cx, cy, 90, "dark")
@@ -13,15 +15,16 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 SCALE = 3
 
+# Frutiger Aero colours: sky blue, leaf green, warm orange, soft silver
 COLORS = {
-    "dark": dict(line="#e2e8f0", body="#1e293b", screen="#38bdf8", accent="#38bdf8", second="#a78bfa",
-                 warn="#fb923c", bad="#f87171", good="#4ade80", paper="#f8fafc", dim="#475569"),
-    "light": dict(line="#1e293b", body="#e2e8f0", screen="#0284c7", accent="#0284c7", second="#7c3aed",
-                  warn="#c2410c", bad="#b91c1c", good="#15803d", paper="#ffffff", dim="#94a3b8"),
+    "dark": dict(line="#d6ecff", body="#34506b", screen="#3fb2f5", accent="#3fb2f5", second="#a48bf5",
+                 warn="#ffa040", bad="#ff6b5e", good="#6fd96a", paper="#ffffff", dim="#6f8ca8"),
+    "light": dict(line="#1d4f7a", body="#e6f1fa", screen="#2a9fe6", accent="#2a9fe6", second="#7b5ce0",
+                  warn="#f08a24", bad="#e0443a", good="#43b649", paper="#ffffff", dim="#8aa6bf"),
 }
 
 
@@ -413,15 +416,61 @@ ICONS = {
 
 # ---------- drawing them ----------
 
+def _aero(img, theme):
+    """The Frutiger Aero finish on a flat icon: lighter at the top and a little
+    darker at the bottom, a glass highlight over the upper half (only on the icon
+    itself), and a soft shadow underneath."""
+    big = img.width
+    alpha = img.getchannel("A")
+    box = alpha.getbbox()
+    if box is None:
+        return img
+    rgb = img.convert("RGB")
+    white, black = Image.new("RGB", img.size, "white"), Image.new("RGB", img.size, "black")
+    # 1. the light gradient, from the top of the icon to its bottom
+    x0, y0, x1, y1 = box
+    ramp = Image.new("L", img.size, 0)
+    rd = ImageDraw.Draw(ramp)
+    for y in range(y0, y1):
+        rd.line([(0, y), (big, y)], fill=int(255 * (y - y0) / max(1, y1 - y0)))
+    rgb = Image.composite(white, rgb, ramp.point(lambda v: int((255 - v) * 0.16)))
+    rgb = Image.composite(black, rgb, ramp.point(lambda v: int(v * 0.18)))
+    # 2. the glass highlight: a soft white oval over the upper half, fading downwards
+    h, w = y1 - y0, x1 - x0
+    gloss = Image.new("L", img.size, 0)
+    gd = ImageDraw.Draw(gloss)
+    top, bottom = y0 - h * 0.45, y0 + h * 0.46
+    for k in range(24):                                  # brighter at the top of the oval
+        t = k / 24
+        gd.ellipse([x0 - w * 0.08 + t * w * 0.04, top + t * (bottom - top) * 0.5,
+                    x1 + w * 0.08 - t * w * 0.04, bottom], fill=int(105 * t ** 0.6))
+    gloss = gloss.filter(ImageFilter.GaussianBlur(big * 0.004))   # a crisp glass edge
+    gloss = ImageChops.multiply(gloss, alpha)
+    gloss = ImageChops.multiply(gloss, ramp.point(lambda v: 255 if v < 128 else max(0, 255 - (v - 128) * 4)))
+    rgb = Image.composite(white, rgb, gloss)
+    shiny = rgb.convert("RGBA")
+    shiny.putalpha(alpha)
+    # 3. a soft shadow, a little below the icon
+    shadow_alpha = alpha.filter(ImageFilter.GaussianBlur(big * 0.025)).point(
+        lambda v: int(v * (0.55 if theme == "dark" else 0.32)))
+    shadow = Image.new("RGBA", img.size, "#000000" if theme == "dark" else "#0b2a4a")
+    shadow.putalpha(shadow_alpha)
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    out.alpha_composite(shadow, (0, int(big * 0.03)))
+    out.alpha_composite(shiny)
+    return out
+
+
 @lru_cache(maxsize=512)
 def icon_image(kind, size, theme="dark"):
-    """A smooth RGBA picture of the icon, size x size pixels."""
+    """A smooth RGBA picture of the icon, size x size pixels, in the Aero style."""
     draw = ICONS.get(kind, _pc)
     big = int(size) * SCALE
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    draw(d, 0, 0, big, COLORS["dark" if theme == "dark" else "light"], max(2, big // 26))
-    return img.resize((int(size), int(size)), Image.Resampling.LANCZOS)
+    theme = "dark" if theme == "dark" else "light"
+    draw(d, 0, 0, big, COLORS[theme], max(2, big // 26))
+    return _aero(img, theme).resize((int(size), int(size)), Image.Resampling.LANCZOS)
 
 
 def paste_icon(d, kind, cx, cy, size, theme="dark"):

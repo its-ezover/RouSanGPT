@@ -68,6 +68,9 @@ is built only with free tools.
   Bob, Trudy the attacker, key, lock, shield, document, envelope, certificate
   authority, globe, home, building, gear), chosen from each device's name, in
   topologies, sequence diagrams, every animation and the explainers.
+- **Frutiger Aero look (this branch):** glass panels over a sky gradient, glossy
+  buttons and message bubbles, a glass-orb Send button, and glossy icons with a
+  shadow, in the light and the dark theme.
 - **Friendly answers:** the tutor uses a few fitting emojis (💡 tips, ⚠️ common
   mistakes, ✅ correct, 🔐 encryption...); read-aloud skips them.
 - **Animations:** message exchanges, store-and-forward packet flow, sliding window

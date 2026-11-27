@@ -355,6 +355,120 @@
     #chat { padding:16px 12px 8px; }
     .composer-wrap { padding:6px 10px 10px; }
   }
+
+  /* ================= Frutiger Aero =================
+     Glass panels over a bright sky, glossy buttons and bubbles. Only colours and
+     surfaces change here: the layout above stays the same. */
+  :root {
+    --bg:#e9f6ff; --surface:rgba(255,255,255,.68); --surface-2:rgba(255,255,255,.55);
+    --surface-3:rgba(196,228,250,.9); --border:rgba(255,255,255,.9); --text:#0b2a45; --muted:#4d6d8a;
+    --accent:#1592dc; --accent-2:#5cc8ff; --on-accent:#ffffff; --user:#1b9ae4; --on-user:#ffffff;
+    --code:rgba(255,255,255,.78); --ok:#2f9e3a; --danger:#d9362b; --err:#d9362b;
+    --shadow:0 2px 6px rgba(15,70,120,.12), 0 14px 34px rgba(15,70,120,.16); --radius:16px;
+    --glass-edge:inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.35);
+    --gloss:linear-gradient(to bottom, rgba(255,255,255,.7) 0%, rgba(255,255,255,.22) 46%, rgba(255,255,255,0) 52%);
+    --aero-btn:linear-gradient(to bottom, #9ae0ff 0%, #4ab6f4 47%, #1789d8 53%, #33a5ee 100%);
+    --sky:radial-gradient(900px 520px at 8% -8%, rgba(255,255,255,.95), transparent 62%),
+          radial-gradient(700px 420px at 105% 105%, rgba(118,214,128,.38), transparent 62%),
+          radial-gradient(260px 260px at 78% 18%, rgba(255,255,255,.55), transparent 70%),
+          radial-gradient(140px 140px at 88% 62%, rgba(255,255,255,.45), transparent 70%),
+          linear-gradient(180deg, #b9e3ff 0%, #e3f4ff 46%, #f2fbff 100%);
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#06263f; --surface:rgba(14,52,82,.62); --surface-2:rgba(24,70,104,.55); --surface-3:rgba(40,96,138,.75);
+      --border:rgba(140,212,255,.24); --text:#e7f5ff; --muted:#9cc4e2; --accent:#4cc3ff; --accent-2:#8fdcff;
+      --on-accent:#032338; --user:#1b8fd6; --on-user:#ffffff; --code:rgba(3,22,38,.72);
+      --ok:#6fd96a; --danger:#ff6b5e; --err:#ff8a7e;
+      --shadow:0 2px 6px rgba(0,0,0,.3), 0 14px 34px rgba(0,0,0,.35);
+      --glass-edge:inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(140,212,255,.12);
+      --gloss:linear-gradient(to bottom, rgba(255,255,255,.2) 0%, rgba(255,255,255,.06) 46%, rgba(255,255,255,0) 52%);
+      --sky:radial-gradient(900px 520px at 10% -10%, rgba(76,195,255,.28), transparent 62%),
+            radial-gradient(700px 440px at 105% 105%, rgba(70,200,140,.24), transparent 62%),
+            radial-gradient(240px 240px at 80% 20%, rgba(143,220,255,.16), transparent 70%),
+            linear-gradient(180deg, #031a2d 0%, #06304f 55%, #073d4a 100%);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#06263f; --surface:rgba(14,52,82,.62); --surface-2:rgba(24,70,104,.55); --surface-3:rgba(40,96,138,.75);
+    --border:rgba(140,212,255,.24); --text:#e7f5ff; --muted:#9cc4e2; --accent:#4cc3ff; --accent-2:#8fdcff;
+    --on-accent:#032338; --user:#1b8fd6; --on-user:#ffffff; --code:rgba(3,22,38,.72);
+    --ok:#6fd96a; --danger:#ff6b5e; --err:#ff8a7e;
+    --shadow:0 2px 6px rgba(0,0,0,.3), 0 14px 34px rgba(0,0,0,.35);
+    --glass-edge:inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(140,212,255,.12);
+    --gloss:linear-gradient(to bottom, rgba(255,255,255,.2) 0%, rgba(255,255,255,.06) 46%, rgba(255,255,255,0) 52%);
+    --sky:radial-gradient(900px 520px at 10% -10%, rgba(76,195,255,.28), transparent 62%),
+          radial-gradient(700px 440px at 105% 105%, rgba(70,200,140,.24), transparent 62%),
+          radial-gradient(240px 240px at 80% 20%, rgba(143,220,255,.16), transparent 70%),
+          linear-gradient(180deg, #031a2d 0%, #06304f 55%, #073d4a 100%);
+    color-scheme:dark;
+  }
+
+  body { background:var(--sky); background-attachment:fixed;
+         font-family:"Segoe UI", Frutiger, "Frutiger Linotype", "Myriad Pro", "Noto Sans", Inter, system-ui,
+                     "Noto Sans Arabic", sans-serif; }
+  /* glass surfaces */
+  #side, header, #bar, .panel, .setup-card, .card, .suggest button, .bot .msg:not(.waiting) {
+    -webkit-backdrop-filter:blur(16px) saturate(1.35); backdrop-filter:blur(16px) saturate(1.35); }
+  #side { background:var(--gloss), var(--surface); border-right:1px solid var(--border);
+          box-shadow:var(--glass-edge), 4px 0 24px rgba(15,70,120,.08); }
+  header { background:var(--surface-2); border-bottom:1px solid var(--border); }
+  #bar { background:var(--gloss), var(--surface); border:1px solid var(--border); border-radius:22px;
+         box-shadow:var(--glass-edge), var(--shadow); }
+  #bar:focus-within { border-color:var(--accent-2); box-shadow:var(--glass-edge), var(--shadow), 0 0 0 3px rgba(92,200,255,.35); }
+  .panel, .setup-card { background:var(--gloss), var(--surface); border:1px solid var(--border);
+                        box-shadow:var(--glass-edge), var(--shadow); }
+  .phead { background:transparent; }
+  .card { background:var(--surface-2); border:1px solid var(--border); box-shadow:var(--glass-edge); }
+  /* the tutor's answers sit on a glass card */
+  .bot .msg:not(.waiting) { background:var(--surface); border:1px solid var(--border); border-radius:18px;
+                            padding:12px 18px; box-shadow:var(--glass-edge), 0 4px 18px rgba(15,70,120,.08); }
+  /* glossy blue bubbles for the student */
+  .user .msg { background:var(--aero-btn); color:#fff; border:1px solid rgba(10,110,180,.55);
+               text-shadow:0 1px 1px rgba(0,40,80,.3);
+               box-shadow:inset 0 1px 0 rgba(255,255,255,.7), 0 3px 10px rgba(20,110,180,.3); }
+  /* glossy buttons */
+  #newChat, .primary { background:var(--aero-btn); color:#fff; border:1px solid #1278bd;
+                       text-shadow:0 1px 1px rgba(0,40,80,.35);
+                       box-shadow:inset 0 1px 0 rgba(255,255,255,.75), 0 3px 10px rgba(20,110,180,.32); }
+  #newChat:hover, .primary:hover { background:var(--aero-btn); filter:brightness(1.07) saturate(1.1); }
+  button { background:var(--gloss), var(--surface-2); border:1px solid var(--border);
+           box-shadow:inset 0 1px 0 rgba(255,255,255,.7); }
+  button:hover { background:var(--gloss), var(--surface-3); }
+  .ico, .actions button, .item .act, #side .bottom button, #mic { border-color:transparent; box-shadow:none;
+                                                               background:none; }
+  .ico:hover, .actions button:hover, #side .bottom button:hover, #mic:hover { background:var(--gloss), var(--surface-2); }
+  /* the send button: a glass orb */
+  #send { background:radial-gradient(circle at 50% 28%, #d4f6ff 0%, #6cd0fb 32%, #1b93de 68%, #0b6db3 100%);
+          border:1px solid #0b65a3; color:#fff;
+          box-shadow:inset 0 2px 3px rgba(255,255,255,.75), inset 0 -3px 6px rgba(0,60,120,.35), 0 3px 10px rgba(10,100,170,.45); }
+  #send:hover { background:radial-gradient(circle at 50% 28%, #e4faff 0%, #84dafd 32%, #22a0ea 68%, #0b75c0 100%); }
+  /* the chat list */
+  .item:hover { background:var(--surface-2); }
+  .item.active { background:var(--gloss), linear-gradient(to bottom, rgba(146,214,255,.55), rgba(92,190,250,.35));
+                 color:var(--text); box-shadow:inset 0 0 0 1px var(--border); }
+  /* fields */
+  select, #search, .field input, .field textarea, .prow input {
+    background:var(--gloss), var(--surface); border:1px solid var(--border); box-shadow:inset 0 1px 2px rgba(15,70,120,.1); }
+  #lang { background:var(--gloss), var(--surface-2); }
+  /* welcome screen */
+  .hero-logo { filter:drop-shadow(0 8px 18px rgba(20,120,200,.35)); }
+  .suggest button { background:var(--gloss), var(--surface); border:1px solid var(--border);
+                    box-shadow:var(--glass-edge), 0 4px 14px rgba(15,70,120,.08); }
+  .suggest button:hover { border-color:var(--accent-2); background:var(--gloss), var(--surface);
+                          box-shadow:var(--glass-edge), var(--shadow); }
+  .suggest .sg-ico { color:#fff; background:radial-gradient(circle at 50% 30%, #c8f2ff 0%, #4fc0f7 40%, #1488d6 100%);
+                     box-shadow:inset 0 1px 1px rgba(255,255,255,.8), 0 2px 6px rgba(20,110,180,.35); }
+  /* badges, pills, chips, tables */
+  .badge, .pill, .chip { background:var(--gloss), var(--surface); border:1px solid var(--border);
+                         box-shadow:inset 0 1px 0 rgba(255,255,255,.7); }
+  .table-wrap { background:var(--surface); box-shadow:var(--glass-edge); }
+  .msg th { background:var(--gloss), linear-gradient(to bottom, rgba(146,214,255,.5), rgba(92,190,250,.3)); }
+  .msg details.sources ul { background:var(--surface-2); }
+  .msg img { box-shadow:0 4px 14px rgba(15,70,120,.15); }
+  .dots i { background:radial-gradient(circle at 50% 30%, #d4f6ff, #2aa2ef 70%); }
 </style>
 </head>
 <body>
