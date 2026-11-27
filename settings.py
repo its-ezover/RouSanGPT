@@ -18,7 +18,7 @@ DEFAULTS = {
     "local_model": "",
     "default_language": "auto",       # auto, english or arabic
     "default_backend": "auto",        # auto, gemini or local
-    "look": "classic",                # classic, aero, cybercore or y2k (see looks.py)
+    "look": "aero",                   # aero (the default), classic, cybercore or y2k (see looks.py)
 }
 LOOKS = ("classic", "aero", "cybercore", "y2k")
 _lock = threading.Lock()
@@ -65,7 +65,7 @@ def key_source():
     return ""
 
 
-_look_cache = [0.0, "classic"]
+_look_cache = [0.0, DEFAULTS["look"]]
 
 
 def look():
@@ -76,9 +76,9 @@ def look():
     if now - _look_cache[0] > 1.0:
         try:
             value = get("look")
-            _look_cache[1] = value if value in LOOKS else "classic"
+            _look_cache[1] = value if value in LOOKS else DEFAULTS["look"]
         except Exception:
-            _look_cache[1] = "classic"
+            _look_cache[1] = DEFAULTS["look"]
         _look_cache[0] = now
     return _look_cache[1]
 

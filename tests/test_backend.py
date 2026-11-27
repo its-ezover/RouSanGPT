@@ -447,13 +447,15 @@ check("read-aloud skips emojis but keeps Arabic",
 # ---- Settings > Look: Classic (flat) or Frutiger Aero ----
 import animation_tools  # noqa: E402
 
-check("the look starts as Classic", server.get_settings()["look"] == "classic" and not settings.aero())
+check("the look starts as Frutiger Aero (the default)", server.get_settings()["look"] == "aero" and settings.aero())
 try:
     server.change_settings(server.SettingsRequest(look="shiny"))
     refused = False
 except HTTPException:
     refused = True
 check("an unknown look is refused", refused)
+server.change_settings(server.SettingsRequest(look="classic"))
+check("Classic can be chosen", settings.look() == "classic" and not settings.aero())
 flat_icon = device_icons.icon_image("router", 64, "light")
 flat_frame = animation_tools.new_frame("t")[0].getpixel((640, 360))
 server.change_settings(server.SettingsRequest(look="aero"))

@@ -158,7 +158,7 @@ def status():
             "knowledge_files": sum(len(v) for k, v in agent.SOURCES.items() if k != "answers"),
             "has_key": bool(settings.api_key()),
             "default_language": s["default_language"], "default_backend": s["default_backend"],
-            "look": s.get("look", "classic"),
+            "look": s["look"],
             "local_running": running, "local_ready": running and local_ai.has_model(models, wanted),
             "local_installed": running or local_ai.is_installed(),
             "local_model": wanted}
@@ -471,7 +471,7 @@ def get_settings():
     return {"has_key": bool(key), "key_source": settings.key_source(),
             "key_hint": ("..." + key[-4:]) if key else "",
             "default_language": s["default_language"], "default_backend": s["default_backend"],
-            "look": s.get("look", "classic"),
+            "look": s["look"],
             "local_model": agent.local_model(), "app_mode": lifecycle.app_mode,
             "data_dir": str(DATA_DIR)}
 

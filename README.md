@@ -71,8 +71,9 @@ is built only with free tools.
 - **Four looks (Settings > Look),** each for the whole app (the page and its
   icons, device icons, pictures, diagrams, animations and video slides), in the
   light and the dark theme:
+  - *Frutiger Aero* (the default): glass panels over a sky, glossy buttons,
+    bubbles and icons.
   - *Classic*: flat.
-  - *Frutiger Aero*: glass panels over a sky, glossy buttons, bubbles and icons.
   - *Cybercore*: neon on near-black, a grid and scanlines, HUD panels with cut
     corners, glitch titles, a monospace font and glowing neon icons.
   - *Y2K*: holographic pastels with sparkles, chrome pill buttons, candy bubbles,
@@ -611,7 +612,7 @@ with the install command instead of a crash.
 | `install.sh`, `uninstall.sh` | Linux installer |
 | `windows/` | Windows setup: `build.ps1`, `RouSanGPT.iss`, `check_bundle.py`, `rousangpt-console.cmd` |
 | `tests/` | automatic tests (see [Tests](#tests)) |
-| `icons/`, `web/logo.png`, `logo.png` | app icons and logo |
+| `icons/`, `web/logo.png`, `web/logo-mark.png`, `logo.png` | app icons and logo: a network, a graduation cap and a padlock (`python logo_art.py` draws them again) |
 
 ---
 
