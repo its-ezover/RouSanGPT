@@ -25,12 +25,34 @@ def _ints(values, name):
     return [_int(v, name) for v in values]
 
 
+# Tool arguments and results travel as JSON, where numbers are 64-bit floats: a whole
+# number above 2^53 (about 9 * 10^15) gets rounded (15068555596066421 arrives as
+# ...420). So the number tools take their numbers as text, and big results go back
+# as text as well.
+EXACT_LIMIT = 2 ** 53
+NUMBERS_AS_TEXT = ("Write every number as text, exactly as the student gave it "
+                   "(for example \"15068555596066421\"), so big numbers stay exact.")
+
+
+def _exact(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return str(value) if abs(value) >= EXACT_LIMIT else value
+    if isinstance(value, dict):
+        return {k: _exact(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_exact(v) for v in value]
+    return value
+
+
 def _safe(func):
-    """Turn bad input into {'error': ...} so the AI can tell the student what was wrong."""
+    """Turn bad input into {'error': ...} so the AI can tell the student what was wrong,
+    and send big whole numbers back as text."""
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            return func(*args, **kwargs)
+            return _exact(func(*args, **kwargs))
         except (ValueError, ZeroDivisionError, OverflowError) as e:
             return {"error": str(e)}
     return wrapper
@@ -134,7 +156,7 @@ def totient(n):
 # ---------- the tools ----------
 
 @_safe
-def gcd_euclid(a: int, b: int) -> dict:
+def gcd_euclid(a: str, b: str) -> dict:
     """Find gcd(a, b) with the Euclidean algorithm, showing every division step
     a = q*b + r, using gcd(a, b) = gcd(b, a mod b). Also says whether a and b are
     relatively prime (gcd = 1). Example: a=710, b=310 gives 10."""
@@ -149,7 +171,7 @@ def gcd_euclid(a: int, b: int) -> dict:
 
 
 @_safe
-def extended_euclid(a: int, b: int) -> dict:
+def extended_euclid(a: str, b: str) -> dict:
     """Extended Euclidean algorithm: find d = gcd(a, b) and integers x, y with
     a*x + b*y = d (Bezout). Returns the table of rows (r_i, q_i, x_i, y_i) where
     each row satisfies r_i = a*x_i + b*y_i, as in the slides (x_i = x_(i-2) - q_i*x_(i-1)).
@@ -181,7 +203,7 @@ def extended_euclid(a: int, b: int) -> dict:
 
 
 @_safe
-def modular_inverse(a: int, n: int) -> dict:
+def modular_inverse(a: str, n: str) -> dict:
     """Find the multiplicative inverse a^-1 mod n (the number b with a*b mod n = 1)
     with the extended Euclidean algorithm. Returns the table with columns
     q, r1, r2, r, t1, t2, t (Forouzan / slide style, starting r1=n, r2=a, t1=0, t2=1):
@@ -208,7 +230,7 @@ def modular_inverse(a: int, n: int) -> dict:
 
 
 @_safe
-def modular_power(base: int, exponent: int, modulus: int) -> dict:
+def modular_power(base: str, exponent: str, modulus: str) -> dict:
     """Calculate base^exponent mod modulus exactly, with the square-and-multiply
     steps. A negative exponent means the inverse first (8^-1 mod 17 = 15).
     Also shows the Fermat / Euler shortcut when it applies (a^(p-1) = 1 mod p,
@@ -245,7 +267,7 @@ def modular_power(base: int, exponent: int, modulus: int) -> dict:
 
 
 @_safe
-def euler_totient(n: int) -> dict:
+def euler_totient(n: str) -> dict:
     """Euler's totient phi(n): how many numbers in 1..n-1 are relatively prime to n.
     Shows the prime factorization and the formula phi(n) = n * product(1 - 1/p),
     e.g. phi(p) = p-1 for a prime and phi(p*q) = (p-1)(q-1). For n up to 200 it
@@ -268,7 +290,7 @@ def euler_totient(n: int) -> dict:
 
 
 @_safe
-def prime_factorization(n: int) -> dict:
+def prime_factorization(n: str) -> dict:
     """Is n prime? Gives the prime factorization n = p1^a1 * p2^a2 * ...
     (Fundamental Theorem of Arithmetic), and for n up to 10^6 the list of
     positive divisors. Works for very large numbers too."""
@@ -286,7 +308,7 @@ def prime_factorization(n: int) -> dict:
 
 
 @_safe
-def miller_rabin_test(n: int, bases: list[int]) -> dict:
+def miller_rabin_test(n: str, bases: list[str]) -> dict:
     """Miller-Rabin primality test, step by step as in the slides: write
     n-1 = 2^k * q with q odd, then for each base a compute a^q, a^(2q), a^(4q), ...
     mod n. If the first is 1 or some value is n-1 the result is 'inconclusive'
@@ -327,7 +349,7 @@ def miller_rabin_test(n: int, bases: list[int]) -> dict:
 
 
 @_safe
-def chinese_remainder(remainders: list[int], moduli: list[int]) -> dict:
+def chinese_remainder(remainders: list[str], moduli: list[str]) -> dict:
     """Solve x = a1 mod m1, x = a2 mod m2, ... with the Chinese Remainder Theorem.
     remainders: [a1, a2, ...]; moduli: [m1, m2, ...] (pairwise relatively prime).
     Shows M = m1*m2*..., Mi = M/mi, the inverse of Mi mod mi and
@@ -356,7 +378,7 @@ def chinese_remainder(remainders: list[int], moduli: list[int]) -> dict:
 
 
 @_safe
-def solve_linear_congruence(a: int, b: int, n: int) -> dict:
+def solve_linear_congruence(a: str, b: str, n: str) -> dict:
     """Solve a*x = b (mod n). Let d = gcd(a, n): if d does not divide b there is no
     solution; otherwise there are d solutions, found with
     x0 = (b/d) * (a/d)^-1 mod (n/d), then x0 + k*(n/d). Example: 14x = 12 (mod 18)."""
@@ -376,7 +398,7 @@ def solve_linear_congruence(a: int, b: int, n: int) -> dict:
 
 
 @_safe
-def primitive_roots(n: int, a: int = 0) -> dict:
+def primitive_roots(n: str, a: str = "0") -> dict:
     """Orders and primitive roots modulo n. With a = 0: list the primitive roots of n
     (numbers whose order equals phi(n)). With a given: the order of a mod n and the
     table of its powers a^1, a^2, ... mod n (like Stallings Table 2.7)."""
@@ -415,7 +437,7 @@ def primitive_roots(n: int, a: int = 0) -> dict:
 
 
 @_safe
-def discrete_logarithm(base: int, value: int, modulus: int) -> dict:
+def discrete_logarithm(base: str, value: str, modulus: str) -> dict:
     """Discrete logarithm: find the smallest x >= 0 with base^x = value (mod modulus),
     written x = dlog(base, modulus)(value). Uses baby-step giant-step, so it works
     for moduli up to about 10^12. Example: base 2, value 9, modulus 11 gives 6."""
@@ -449,7 +471,7 @@ def discrete_logarithm(base: int, value: int, modulus: int) -> dict:
 
 
 @_safe
-def modular_tables(n: int) -> dict:
+def modular_tables(n: str) -> dict:
     """Addition and multiplication tables modulo n (Zn), with the additive and
     multiplicative inverse of every element (slides: 'Addition/Multiplication Modulo 8').
     Also says whether Zn is a field (n prime) and whether GF(n) exists (n a prime
@@ -477,6 +499,8 @@ NUMBER_THEORY_TOOLS = [gcd_euclid, extended_euclid, modular_inverse, modular_pow
                        euler_totient, prime_factorization, miller_rabin_test,
                        chinese_remainder, solve_linear_congruence, primitive_roots,
                        discrete_logarithm, modular_tables]
+for _tool in NUMBER_THEORY_TOOLS:
+    _tool.__doc__ += " " + NUMBERS_AS_TEXT
 
 
 if __name__ == "__main__":

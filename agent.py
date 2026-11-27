@@ -134,7 +134,10 @@ brute force), affine_cipher, monoalphabetic_cipher, letter_frequency,
 vigenere_cipher (also autokey), playfair_cipher, hill_cipher, vernam_xor (one-time
 pad), rail_fence_cipher, row_transposition_cipher, block_cipher_sizes and
 brute_force_time. Never encrypt, decrypt or do modular arithmetic in your head: a
-single wrong letter or number ruins the answer. Explain the tool's steps to the
+single wrong letter or number ruins the answer. Give the number tools their numbers
+as text, copied digit by digit from the student's message (for example
+"15068555596066421"), and copy big results from the tool exactly: numbers above
+about 9 * 10^15 lose their last digits if they are sent as plain numbers. Explain the tool's steps to the
 student. If the student's convention differs from the tool's (for example Hill
 cipher row or column vectors, or the filler letter), say which one you used. For any other arithmetic
 (throughput, utilization, RTT, unit conversions) use the calculator tool. Custom

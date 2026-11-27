@@ -253,6 +253,12 @@ check("Miller-Rabin: 1729 with a = 671 is composite (k = 6, q = 27)",
       (r["k"], r["q"]) == (6, 27) and r["conclusion"].startswith("composite"))
 check("phi(21) = 12", nt.euler_totient(21)["phi"] == 12)
 check("CRT: x = 2 mod 3, 3 mod 5, 2 mod 7 gives 23", nt.chinese_remainder([2, 3, 2], [3, 5, 7])["x"] == 23)
+check("big numbers given as text stay exact: gcd = 67",
+      nt.gcd_euclid("521262320887169", "15068555596066421")["gcd"] == 67)
+r = nt.extended_euclid("521262320887169", "15068555596066421")
+check("big results go back as text, and a*x + b*y = 67",
+      isinstance(r["y"], (int, str)) and 521262320887169 * int(r["x"]) + 15068555596066421 * int(r["y"]) == 67
+      and all(not isinstance(v, int) or abs(v) < 2 ** 53 for row in r["table"] for v in row.values()))
 check("bad input gives an error message, not a crash", "error" in nt.modular_power("abc", 2, 5))
 r = ff.polynomial_arithmetic("x^3 + x^2 + 2", "x^2 - x + 1", "divide", 0)
 check("polynomial division: quotient x + 2, remainder x", (r["quotient"], r["remainder"]) == ("x + 2", "x"))
